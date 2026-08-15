@@ -1,0 +1,22 @@
+{
+  "name": "attendance-tracker",
+  "version": "1.0.0",
+  "description": "Meeting attendance tracking application",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js",
+    "docs": "node generate-doc.js"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "mysql2": "^3.9.7"
+  },
+  "devDependencies": {
+    "docx": "^9.7.1"
+  }
+}

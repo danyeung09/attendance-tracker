@@ -1,0 +1,2349 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Attendance Tracker</title>
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+</head>
+<body class="bg-gray-50 min-h-screen">
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect, useCallback, useRef, useMemo, createContext, useContext } = React;
+
+    // ─── Translations ─────────────────────────────────────────────────────────
+    const TRANSLATIONS = {
+      en: {
+        locale: 'en-US',
+        langToggle: '中文',
+        days: ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'],
+        appName: 'AttendanceTracker',
+        meetingAttendance: 'Meeting Attendance',
+        today: 'Today',
+        tomorrow: 'Tomorrow',
+        inDays: n => `In ${n} days`,
+        groupCount: n => `${n} group${n!==1?'s':''}`,
+        sessionsRecorded: n => `${n} session${n!==1?'s':''} recorded`,
+        noRecordsToday: 'No records today',
+        overview: 'Overview',
+        labelPeople: 'People',
+        labelGroups: 'Groups',
+        labelSessions: 'Sessions',
+        every: 'Every',
+        noGroupsAdmin: 'No groups yet — add them in Admin mode.',
+        memberCount: n => `${n} member${n!==1?'s':''}`,
+        recorded: 'Recorded',
+        noRecord: 'No record',
+        presentOf: (p, tot) => `${p}/${tot} present`,
+        sessionDate: 'Session Date',
+        presentCount: (p, tot) => `${p}/${tot} Present`,
+        allPresent: 'All Present',
+        allAbsent: 'All Absent',
+        presentLabel: 'Present',
+        absentLabel: 'Absent',
+        saveAttendance: 'Save Attendance',
+        saving: 'Saving…',
+        attendanceSaved: '✓ Attendance Saved',
+        errSaving: e => 'Error saving: ' + e,
+        chartPresentTip: ctx => ` ${ctx.dataset.label}: ${ctx.parsed.y} present`,
+        chartPresentLabel: 'Present',
+        chartAbsentLabel: 'Absent',
+        attendanceHistory: 'Attendance History',
+        allMeetings: 'All Meetings',
+        noRecords: 'No attendance records found.',
+        attendanceTrend: 'Attendance Trend',
+        byGroup: 'By Group',
+        adminPasswordPh: 'Admin password',
+        login: 'Sign In',
+        cancel: 'Cancel',
+        save: 'Save',
+        create: 'Create',
+        goBack: 'Go Back',
+        signInTitle: 'Attendance Tracker',
+        signInSubtitle: 'Sign in to continue',
+        registerSubtitle: 'Create your account',
+        breakGlassSubtitle: 'Recovery sign-in for admins',
+        usernamePh: 'Username',
+        displayNamePh: 'Display name (optional)',
+        passwordPh: 'Password',
+        currentPasswordPh: 'Current password',
+        newPasswordPh: 'New password',
+        confirmPasswordPh: 'Confirm password',
+        passwordsDiffer: 'The two passwords do not match.',
+        registerHint: 'Anyone can register. An admin then gives your account access — you will see a waiting screen until they do.',
+        createAccount: 'Create Account',
+        needAccount: "Don't have an account? Create one",
+        haveAccount: 'Already have an account? Sign in',
+        useBreakGlass: 'Sign in with the admin password instead',
+        wrongPassword: 'Incorrect password.',
+        changePassword: 'Change Password',
+        changePasswordBody: 'You will stay signed in here. Any other device signed in as you will be signed out.',
+        passwordChanged: 'Password changed.',
+        noAccessTitle: 'No management access',
+        noAccessBody: (who) => `${who ? who + ', your' : 'Your'} account can view meetings, rosters and attendance history. Ask an admin to make you a super user if you need to record attendance or manage groups and people.`,
+        roleNames: { pending: 'Pending', viewer: 'Viewer', super: 'Super user', admin: 'Admin' },
+        navHome: 'Home',
+        navHistory: 'History',
+        navManage: 'Manage',
+        navRefresh: 'Refresh',
+        newUser: 'New User',
+        noUsers: 'No accounts yet.',
+        usersHint: 'Roles take effect immediately — the next thing that person does uses the new role.',
+        pendingWaiting: n => n === 1 ? '1 person is waiting for you to give them access.' : `${n} people are waiting for you to give them access.`,
+        pendingTitle: 'Waiting for approval',
+        pendingBody: (who) => `${who ? who + ', your' : 'Your'} account has been created. An admin needs to give it access before you can see meetings or record attendance. Check back shortly.`,
+        youLabel: '(you)',
+        deactivatedLabel: '· deactivated',
+        resetPassword: 'Reset password',
+        resetPasswordBody: (who) => `Set a new password for @${who}. They will be signed out everywhere.`,
+        passwordResetDone: 'Password reset. Give them the new password.',
+        deactivate: 'Deactivate',
+        reactivate: 'Reactivate',
+        confirmRoleChange: (who, role) => `Change @${who} to ${role}?`,
+        confirmDeactivate: (who) => `Deactivate @${who}? They will be signed out and cannot sign in until reactivated.`,
+        confirmReactivate: (who) => `Reactivate @${who}?`,
+        confirmDeleteUser: (who) => `Delete the account @${who}? This cannot be undone. Attendance they recorded is not affected.`,
+        breakGlassWarning: 'You are signed in with the break-glass admin password, not an account. Create an admin account for yourself so you can stop using it.',
+        tooManyAttempts: 'Too many failed attempts. Try again in 15 minutes.',
+        signingIn: 'Signing in…',
+        signOut: 'Sign Out',
+        sessionExpired: 'Your session has expired. Please sign in again.',
+        adminPanel: 'Admin Panel',
+        managePanel: 'Manage',
+        adminActive: 'Admin mode active',
+        superActive: 'Super user mode active',
+        exitAdmin: 'Exit',
+        tabLabels: ['groups', 'people', 'meetings', 'users'],
+        newGroup: 'New Group',
+        editGroupTitle: 'Edit Group',
+        newGroupTitle: 'New Group',
+        groupNameLabel: 'Group Name',
+        groupNamePh: 'e.g. Worship Team',
+        nameEnLabel: 'English Name',
+        nameZhLabel: 'Chinese Name',
+        nameHint: 'Fill in at least one — the other can be added later.',
+        meetingLabel: 'Meeting',
+        membersLabel: 'Members',
+        selectedCount: n => `(${n} selected)`,
+        addPeopleFirst: 'Add people first in the People tab.',
+        addMember: 'Add Member',
+        noGroupsYet: 'No groups yet.',
+        importCSV: 'Import CSV',
+        newPerson: 'New Person',
+        noPeople: 'No people added yet.',
+        newMeeting: 'New Meeting',
+        editMeetingTitle: 'Edit Meeting',
+        newMeetingTitle: 'New Meeting',
+        meetingNameLabel: 'Meeting Name',
+        meetingNamePh: 'e.g. Prayer Meeting',
+        dayOfWeekLabel: 'Day of Week',
+        firstNameLabel: 'First Name',
+        firstNamePh: 'First name',
+        lastNameLabel: 'Last Name',
+        lastNamePh: 'Last name',
+        phoneLabel: 'Phone',
+        phonePh: '555-0100',
+        saveGroup: 'Save Group',
+        savePerson: 'Save Person',
+        saveMeeting: 'Save Meeting',
+        importTitle: 'Import from CSV',
+        confirmDeleteGroup: 'Delete this group?',
+        confirmDeletePerson: 'Remove this person? They will be taken out of all groups, but past attendance records keep their name.',
+        confirmDeleteMeeting: 'Delete this meeting? Groups only assigned to it will be removed; groups also assigned to other meetings will stay, just without this one.',
+        confirmRemoveMember: 'Remove this person from the group?',
+        groupMeetingsRequired: 'Select at least one meeting.',
+        alreadyInGroup: name => `This person is already in "${name}" for this meeting. A member can only belong to one group per meeting.`,
+        archivedTip: 'No longer active — kept so this record stays accurate.',
+        conflictTitle: 'Someone else saved this session first',
+        conflictBody: (theirs, mine) =>
+          `Their version marks ${theirs} present; yours marks ${mine}. Choose which to keep — nothing has been overwritten yet.`,
+        useTheirs: 'Use their version',
+        keepMine: 'Replace with mine',
+        outOfDateNotice: 'Someone else has updated this session since you opened it. Saving will replace their version.',
+        groupNameRequired: 'Group name required.',
+        nameRequired: 'First and last name required.',
+        meetingNameRequired: 'Meeting name required.',
+        noValidRows: 'No valid rows to import (firstName and lastName are required).',
+        noUnassigned: 'Everyone is already in a group for this meeting. Create a new person, or remove someone from another group in this meeting first.',
+        addMemberTo: 'to',
+        errGeneric: e => 'Error: ' + e,
+        importedResult: r => {
+          let s = `Imported ${r.added} ${r.added===1?'person':'people'}`;
+          if (r.groupsUpdated>0) s += `, added to ${r.groupsUpdated} group${r.groupsUpdated===1?'':'s'}`;
+          if (r.skipped>0) s += `, skipped ${r.skipped} duplicate${r.skipped===1?'':'s'}`;
+          if (r.groupsNotFound>0) s += ` (${r.groupsNotFound} group name${r.groupsNotFound===1?' was':' were'} not found)`;
+          return s;
+        },
+        validLabel: 'valid',
+        missingNameLabel: 'missing name — will be skipped',
+        groupNamesNotFound: n => `${n} group name${n===1?' not':' names not'} found — person will still be imported`,
+        colFirst: 'First Name', colLast: 'Last Name', colPhone: 'Phone', colGroup: 'Group', colStatus: 'Status',
+        statusOk: 'OK', statusSkip: 'Skip', missingText: 'missing',
+        importCount: n => `Import ${n} ${n===1?'Person':'People'}`,
+        pinGroup: 'Pin to top',
+        unpinGroup: 'Unpin',
+        othersGroups: n => `Others (${n})`,
+        viewOnlyAttendance: 'View only — ask an admin to make you a super user to record attendance.',
+      },
+      zh: {
+        locale: 'zh-TW',
+        langToggle: 'EN',
+        days: ['星期日','星期一','星期二','星期三','星期四','星期五','星期六'],
+        appName: '出席記錄',
+        meetingAttendance: '聚會出席',
+        today: '今天',
+        tomorrow: '明天',
+        inDays: n => `${n}天後`,
+        groupCount: n => `${n} 個小組`,
+        sessionsRecorded: n => `已記錄 ${n} 次`,
+        noRecordsToday: '今天暫無記錄',
+        overview: '概覽',
+        labelPeople: '人數',
+        labelGroups: '小組',
+        labelSessions: '記錄',
+        every: '每',
+        noGroupsAdmin: '尚未有小組 — 請在管理模式中新增。',
+        memberCount: n => `${n} 位成員`,
+        recorded: '已記錄',
+        noRecord: '無記錄',
+        presentOf: (p, tot) => `${p}/${tot} 出席`,
+        sessionDate: '聚會日期',
+        presentCount: (p, tot) => `${p}/${tot} 出席`,
+        allPresent: '全部出席',
+        allAbsent: '全部缺席',
+        presentLabel: '出席',
+        absentLabel: '缺席',
+        saveAttendance: '儲存出席',
+        saving: '儲存中…',
+        attendanceSaved: '✓ 出席已儲存',
+        errSaving: e => '儲存錯誤：' + e,
+        chartPresentTip: ctx => ` ${ctx.dataset.label}: ${ctx.parsed.y} 出席`,
+        chartPresentLabel: '出席',
+        chartAbsentLabel: '缺席',
+        attendanceHistory: '出席歷史',
+        allMeetings: '所有聚會',
+        noRecords: '找不到出席記錄。',
+        attendanceTrend: '出席趨勢',
+        byGroup: '按小組',
+        adminPasswordPh: '管理員密碼',
+        login: '登入',
+        cancel: '取消',
+        save: '儲存',
+        create: '建立',
+        goBack: '返回',
+        signInTitle: '出席記錄',
+        signInSubtitle: '請登入以繼續',
+        registerSubtitle: '建立您的帳號',
+        breakGlassSubtitle: '管理員救援登入',
+        usernamePh: '使用者名稱',
+        displayNamePh: '顯示名稱（選填）',
+        passwordPh: '密碼',
+        currentPasswordPh: '目前密碼',
+        newPasswordPh: '新密碼',
+        confirmPasswordPh: '確認密碼',
+        passwordsDiffer: '兩次輸入的密碼不一致。',
+        registerHint: '任何人均可註册。註册後須由管理員授予權限，在此之前您會看到等待畫面。',
+        createAccount: '建立帳號',
+        needAccount: '還沒有帳號？建立一個',
+        haveAccount: '已經有帳號？請登入',
+        useBreakGlass: '改用管理員密碼登入',
+        wrongPassword: '密碼錯誤。',
+        changePassword: '變更密碼',
+        changePasswordBody: '您在此裝置將保持登入。其他已登入您帳號的裝置將被登出。',
+        passwordChanged: '密碼已變更。',
+        noAccessTitle: '沒有管理權限',
+        noAccessBody: (who) => `${who ? who + '，您的' : '您的'}帳號可檢視聚會、名單與出席歷史記錄。若需記錄出席或管理小組與人員，請請管理員將您設為超級使用者。`,
+        roleNames: { pending: '待審核', viewer: '檢視者', super: '超級使用者', admin: '管理員' },
+        navHome: '首頁',
+        navHistory: '歷史記錄',
+        navManage: '管理',
+        navRefresh: '重新載入',
+        newUser: '新增帳號',
+        noUsers: '尚無帳號。',
+        usersHint: '角色變更立即生效 — 該使用者的下一個動作即採用新角色。',
+        pendingWaiting: n => `有 ${n} 位使用者等待您授予權限。`,
+        pendingTitle: '等待審核',
+        pendingBody: (who) => `${who ? who + '，您的' : '您的'}帳號已建立。需由管理員授予權限後，才能檢視聴會或記錄出席。請稍後再試。`,
+        youLabel: '（您）',
+        deactivatedLabel: '· 已停用',
+        resetPassword: '重設密碼',
+        resetPasswordBody: (who) => `為 @${who} 設定新密碼。該使用者將在所有裝置被登出。`,
+        passwordResetDone: '密碼已重設，請將新密碼交給該使用者。',
+        deactivate: '停用',
+        reactivate: '重新啟用',
+        confirmRoleChange: (who, role) => `確定將 @${who} 變更為${role}？`,
+        confirmDeactivate: (who) => `確定停用 @${who}？該使用者將被登出，且在重新啟用前無法登入。`,
+        confirmReactivate: (who) => `確定重新啟用 @${who}？`,
+        confirmDeleteUser: (who) => `確定刪除帳號 @${who}？此操作無法復原。該使用者已記錄的出席資料不受影響。`,
+        breakGlassWarning: '您目前使用管理員救援密碼登入，並非帳號。建議為自己建立管理員帳號，以便停止使用救援密碼。',
+        tooManyAttempts: '嘗試次數過多，請於 15 分鐘後再試。',
+        signingIn: '登入中…',
+        signOut: '登出',
+        sessionExpired: '登入已逾時，請重新登入。',
+        adminPanel: '管理面板',
+        managePanel: '管理',
+        adminActive: '管理模式已啟用',
+        superActive: '超級使用者模式已啟用',
+        exitAdmin: '退出',
+        tabLabels: ['小組', '人員', '聚會', '帳號'],
+        newGroup: '新增小組',
+        editGroupTitle: '編輯小組',
+        newGroupTitle: '新增小組',
+        groupNameLabel: '小組名稱',
+        groupNamePh: '例：敬拜團隊',
+        nameEnLabel: '英文名稱',
+        nameZhLabel: '中文名稱',
+        nameHint: '至少填寫一項，之後可以再補上另一個語言。',
+        meetingLabel: '聚會',
+        membersLabel: '成員',
+        selectedCount: n => `（已選 ${n} 人）`,
+        addPeopleFirst: '請先在人員頁籤新增人員。',
+        addMember: '新增成員',
+        noGroupsYet: '尚未有小組。',
+        importCSV: '匯入 CSV',
+        newPerson: '新增人員',
+        noPeople: '尚未新增人員。',
+        newMeeting: '新增聚會',
+        editMeetingTitle: '編輯聚會',
+        newMeetingTitle: '新增聚會',
+        meetingNameLabel: '聚會名稱',
+        meetingNamePh: '例：禱告會',
+        dayOfWeekLabel: '星期',
+        firstNameLabel: '名字',
+        firstNamePh: '名字',
+        lastNameLabel: '姓氏',
+        lastNamePh: '姓氏',
+        phoneLabel: '電話',
+        phonePh: '0912-345-678',
+        saveGroup: '儲存小組',
+        savePerson: '儲存人員',
+        saveMeeting: '儲存聚會',
+        importTitle: '從 CSV 匯入',
+        confirmDeleteGroup: '確定刪除此小組？',
+        confirmDeletePerson: '確定移除此人員？他們將從所有小組中移除，但過往的出席記錄仍會保留其姓名。',
+        confirmDeleteMeeting: '確定刪除此聚會？僅屬於此聚會的小組將被移除；同時屬於其他聚會的小組會保留，只是不再包含此聚會。',
+        confirmRemoveMember: '確定將此人從小組中移除？',
+        groupMeetingsRequired: '請至少選擇一個聚會。',
+        alreadyInGroup: name => `此人在此聚會中已屬於「${name}」。每位成員在同一聚會中只能屬於一個小組。`,
+        archivedTip: '已非現行成員 — 保留以維持此記錄的準確性。',
+        conflictTitle: '其他人已先儲存此次聚會記錄',
+        conflictBody: (theirs, mine) =>
+          `對方的版本記錄 ${theirs} 人出席，您的版本為 ${mine} 人。請選擇要保留哪一個 — 目前尚未覆寫任何資料。`,
+        useTheirs: '使用對方的版本',
+        keepMine: '以我的版本覆寫',
+        outOfDateNotice: '自您開啟後，其他人已更新此次聚會記錄。儲存將會取代對方的版本。',
+        groupNameRequired: '請輸入小組名稱。',
+        nameRequired: '請輸入名字和姓氏。',
+        meetingNameRequired: '請輸入聚會名稱。',
+        noValidRows: '沒有可匯入的有效資料（需要名字和姓氏）。',
+        noUnassigned: '此聚會中所有人員均已分配到小組。請新增人員，或先從此聚會的其他小組移除成員。',
+        addMemberTo: '至',
+        errGeneric: e => '錯誤：' + e,
+        importedResult: r => {
+          let s = `已匯入 ${r.added} 位人員`;
+          if (r.groupsUpdated>0) s += `，已加入 ${r.groupsUpdated} 個小組`;
+          if (r.skipped>0) s += `，略過 ${r.skipped} 個重複`;
+          if (r.groupsNotFound>0) s += `（${r.groupsNotFound} 個小組名稱未找到）`;
+          return s;
+        },
+        validLabel: '有效',
+        missingNameLabel: '缺少姓名 — 將略過',
+        groupNamesNotFound: n => `${n} 個小組名稱未找到 — 人員仍將匯入`,
+        colFirst: '名字', colLast: '姓氏', colPhone: '電話', colGroup: '小組', colStatus: '狀態',
+        statusOk: '有效', statusSkip: '略過', missingText: '缺少',
+        importCount: n => `匯入 ${n} 位人員`,
+        pinGroup: '置頂',
+        unpinGroup: '取消置頂',
+        othersGroups: n => `其他 (${n})`,
+        viewOnlyAttendance: '僅供檢視 — 若需記錄出席，請請管理員將您設為超級使用者。',
+      },
+    };
+
+    // ─── CSV parser ───────────────────────────────────────────────────────────
+    function parseCSV(text) {
+      const lines = text.trim().split(/\r?\n/);
+      if (lines.length < 2) return { rows: [], error: 'CSV needs at least a header row and one data row.' };
+      const parseLine = (line) => {
+        const fields = [];
+        let cur = '', inQuote = false;
+        for (let i = 0; i < line.length; i++) {
+          const c = line[i];
+          if (inQuote) {
+            if (c === '"' && line[i+1] === '"') { cur += '"'; i++; }
+            else if (c === '"') inQuote = false;
+            else cur += c;
+          } else {
+            if (c === '"') inQuote = true;
+            else if (c === ',') { fields.push(cur.trim()); cur = ''; }
+            else cur += c;
+          }
+        }
+        fields.push(cur.trim());
+        return fields;
+      };
+      const colMap = { firstname:'firstName', lastname:'lastName', phone:'phone', phonenumber:'phone', mobile:'phone', tel:'phone', group:'group', groupname:'group' };
+      const rawHeaders = parseLine(lines[0]);
+      const headerKeys = rawHeaders.map(h => colMap[h.toLowerCase().replace(/[\s_\-]/g,'')] || null);
+      const rows = [];
+      for (let i = 1; i < lines.length; i++) {
+        if (!lines[i].trim()) continue;
+        const vals = parseLine(lines[i]);
+        const row = {};
+        headerKeys.forEach((k, idx) => { if (k) row[k] = (vals[idx] || '').trim(); });
+        rows.push(row);
+      }
+      return { rows };
+    }
+
+    const todayStr = () => {
+      const d = new Date();
+      return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+    };
+
+    const fmtDate = (s, locale = 'en-US') =>
+      new Date(s + 'T00:00:00').toLocaleDateString(locale, {
+        weekday:'long', year:'numeric', month:'long', day:'numeric'
+      });
+
+    // ─── API helpers ──────────────────────────────────────────────────────────
+    // Registered by the Provider, so a session rejected anywhere in the app
+    // drops straight back to the sign-in screen.
+    let onUnauthorized = () => {};
+
+    // Endpoints where a 401 is a rejected credential rather than a dead session.
+    const CREDENTIAL_PATHS = new Set([
+      '/api/login', '/api/login/break-glass', '/api/register', '/api/me/password',
+    ]);
+
+    const handle = async (r) => {
+      // Tolerate non-JSON bodies (proxy error pages, etc.) instead of throwing
+      // an opaque parse error.
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        const err = new Error(j.error || r.statusText);
+        err.status = r.status;
+        // Some failures carry usable data — a 409 includes the version that beat
+        // us, which the caller needs in order to offer a resolution.
+        err.body = j;
+        // A 401 from one of these means "those credentials are wrong", not "your
+        // session died" — bouncing the user to the sign-in screen would throw
+        // away a perfectly good session and lose whatever they were doing.
+        if (r.status === 401 && !CREDENTIAL_PATHS.has(new URL(r.url).pathname)) onUnauthorized();
+        throw err;
+      }
+      return j;
+    };
+
+    const send = (method, url, body) => fetch(url, {
+      method,
+      credentials: 'same-origin',
+      ...(body === undefined ? {} : { headers:{'Content-Type':'application/json'}, body:JSON.stringify(body) }),
+    }).then(handle);
+
+    const api = {
+      get:   (url)             => send('GET', url),
+      post:  (url, body = {})  => send('POST', url, body),
+      put:   (url, body = {})  => send('PUT', url, body),
+      patch: (url, body = {})  => send('PATCH', url, body),
+      del:   (url)             => send('DELETE', url),
+    };
+
+    // ─── Context ──────────────────────────────────────────────────────────────
+    const Ctx = createContext();
+    const useApp = () => useContext(Ctx);
+
+    const EMPTY = { meetings:[], groups:[], people:[], attendance:[] };
+
+    // A meeting/group name is bilingual — { en, zh } — so it reads correctly
+    // under either language toggle. Falls back across languages so a name
+    // never renders blank even if one side was somehow left empty.
+    const localizedName = (obj, lang) => (obj && obj.name && (obj.name[lang] || obj.name.en || obj.name.zh)) || '';
+
+    // CSV group-name matching: a name typed in the CSV might be either the
+    // English or the Chinese side of a bilingual group name.
+    const groupNameMatches = (g, name) => {
+      const wanted = String(name).trim().toLowerCase();
+      return [g.name.en, g.name.zh].some(n => n && n.toLowerCase() === wanted);
+    };
+
+    // A person deleted by an admin is archived, not removed, so past attendance
+    // still resolves to a real name and its totals stay correct. Archived people
+    // belong to no group and must stay out of every roster, count and picker —
+    // the one place they still appear is the history list.
+    const activePeople = (data) => data.people.filter(p => !p.archived);
+
+    // A person may be in one group per meeting — a Sunday team and a Friday small
+    // group is fine, two Friday groups is not. Mirrors the server's rule. A group
+    // can be assigned to several meetings, so `meetingIds` is checked for overlap
+    // rather than equality.
+    const groupClash = (data, personId, meetingIds, exceptGroupId) =>
+      data.groups.find(g =>
+        g.id !== exceptGroupId &&
+        g.meetingIds.some(mid => meetingIds.includes(mid)) &&
+        g.memberIds.includes(personId)
+      );
+
+    const Provider = ({ children }) => {
+      const [data,     setData]     = useState(EMPTY);
+      const [loading,  setLoading]  = useState(true);
+      const [apiError, setApiError] = useState(null);
+      const [view,     setView]     = useState({ name:'home' });
+      const [history,  setHistory]  = useState([]);
+      const [lang,     setLang]     = useState('en');
+
+      // Session state comes from the server; the client cannot grant itself a role.
+      const [role,       setRole]       = useState(null);        // null | 'viewer' | 'super' | 'admin'
+      const [username,   setUsername]   = useState(null);
+      const [breakGlass, setBreakGlass] = useState(false);
+      // Which groups this account has pinned to the top of a meeting's group
+      // list — a personal display preference, not a permission.
+      const [focusGroupIds, setFocusGroupIds] = useState([]);
+      const [authState,  setAuthState]  = useState('checking');  // 'checking' | 'anon' | 'ok'
+      const [authNotice, setAuthNotice] = useState(null);
+
+      const t = TRANSLATIONS[lang];
+      // Mirrors the server's ordered roles. These only decide what to render —
+      // every endpoint re-checks the session role independently.
+      const isAdmin  = role === 'admin';                        // + archive people, meetings
+      const canManage = role === 'admin' || role === 'super';   // + groups, membership, people
+
+      const refresh = useCallback(async () => {
+        try {
+          const d = await api.get('/api/data');
+          setData(d);
+          setApiError(null);
+        } catch (e) {
+          // 401 already routes through onUnauthorized — don't also claim the
+          // server is unreachable.
+          if (e.status !== 401) setApiError('Could not reach server. Please try again.');
+        }
+      }, []);
+
+      const resetToSignedOut = useCallback((notice) => {
+        setRole(null);
+        setUsername(null);
+        setBreakGlass(false);
+        setFocusGroupIds([]);
+        setAuthState('anon');
+        setAuthNotice(notice || null);
+        setData(EMPTY);
+        setView({ name:'home' });
+        setHistory([]);
+      }, []);
+
+      // Declared before the session check so an early 401 is never missed.
+      useEffect(() => {
+        onUnauthorized = () => resetToSignedOut(t.sessionExpired);
+        return () => { onUnauthorized = () => {}; };
+      }, [resetToSignedOut, t]);
+
+      // Establish the session before loading any data.
+      useEffect(() => {
+        let cancelled = false;
+        (async () => {
+          try {
+            const s = await api.get('/api/session');
+            if (cancelled) return;
+            if (s.authenticated) {
+              setRole(s.role);
+              setUsername(s.username || null);
+              setBreakGlass(!!s.breakGlass);
+              setFocusGroupIds(s.focusGroupIds || []);
+              setAuthState('ok');
+              await refresh();
+            } else {
+              setAuthState('anon');
+            }
+          } catch {
+            if (!cancelled) {
+              setAuthState('anon');
+              setApiError('Could not reach server. Please try again.');
+            }
+          } finally {
+            if (!cancelled) setLoading(false);
+          }
+        })();
+        return () => { cancelled = true; };
+      }, []);
+
+      // Shared tail for every way of getting a session: account sign-in,
+      // registration, or the break-glass admin password.
+      const adoptSession = useCallback(async (session) => {
+        setRole(session.role);
+        setUsername(session.username || null);
+        setBreakGlass(!!session.breakGlass);
+        setFocusGroupIds(session.focusGroupIds || []);
+        setAuthState('ok');
+        setAuthNotice(null);
+        setLoading(true);
+        try { await refresh(); } finally { setLoading(false); }
+      }, [refresh]);
+
+      const signIn = useCallback(async (username, password) =>
+        adoptSession(await api.post('/api/login', { username, password })), [adoptSession]);
+
+      // Always lands as a viewer — the server ignores any role the client sends.
+      const register = useCallback(async (fields) =>
+        adoptSession(await api.post('/api/register', fields)), [adoptSession]);
+
+      // Recovery path: works with no account, so losing every admin account
+      // isn't fatal.
+      const signInBreakGlass = useCallback(async (password) =>
+        adoptSession(await api.post('/api/login/break-glass', { password })), [adoptSession]);
+
+      const signOut = useCallback(async () => {
+        try { await api.post('/api/logout'); } catch { /* clear locally regardless */ }
+        resetToSignedOut(null);
+      }, [resetToSignedOut]);
+
+      // Optimistic: flip the pin locally so the list re-sorts at once, then
+      // persist. Reverts on failure rather than leaving the UI lying about
+      // what's actually saved.
+      const toggleFocusGroup = useCallback(async (groupId) => {
+        const next = focusGroupIds.includes(groupId)
+          ? focusGroupIds.filter(id => id !== groupId)
+          : [...focusGroupIds, groupId];
+        setFocusGroupIds(next);
+        try {
+          await api.patch('/api/me/focus-groups', { groupIds: next });
+        } catch {
+          setFocusGroupIds(focusGroupIds);
+        }
+      }, [focusGroupIds]);
+
+      const navigate = useCallback((newView) => {
+        setHistory(h => [...h, view]);
+        setView(newView);
+      }, [view]);
+
+      const goBack = useCallback(() => {
+        if (history.length === 0) return;
+        setView(history[history.length - 1]);
+        setHistory(h => h.slice(0, -1));
+      }, [history]);
+
+      const goHome = useCallback(() => {
+        setView({ name:'home' });
+        setHistory([]);
+      }, []);
+
+      return (
+        <Ctx.Provider value={{
+          data, refresh, loading, apiError, view, navigate, goBack, goHome, history, lang, setLang, t,
+          role, isAdmin, canManage, username, breakGlass, authState, authNotice,
+          signIn, register, signInBreakGlass, signOut,
+          focusGroupIds, toggleFocusGroup,
+        }}>
+          {children}
+        </Ctx.Provider>
+      );
+    };
+
+    // ─── Icons ────────────────────────────────────────────────────────────────
+    const I = {
+      Home:     () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" /></svg>,
+      History:  () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>,
+      Clock:    () => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>,
+      Settings: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><circle cx="12" cy="12" r="3" /></svg>,
+      Back:     () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>,
+      Plus:     () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>,
+      Edit:     () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>,
+      Trash:    () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>,
+      Users:    () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" /></svg>,
+      Refresh:  () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>,
+      Check:    ({ cls = 'w-3.5 h-3.5' }) => <svg className={cls} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>,
+      SignOut:  () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>,
+      Key:      () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" /></svg>,
+      Chevron:  () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>,
+      Star:     ({ filled }) => (
+        <svg className="w-5 h-5" viewBox="0 0 24 24" fill={filled ? 'currentColor' : 'none'} stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={filled ? 0 : 1.5}
+            d="M11.48 3.5a.562.562 0 011.04 0l2.125 5.111a.563.563 0 00.475.345l5.518.442c.499.04.701.663.321.988l-4.204 3.602a.563.563 0 00-.182.557l1.285 5.385a.562.562 0 01-.84.61l-4.725-2.885a.562.562 0 00-.586 0l-4.725 2.885a.562.562 0 01-.84-.61l1.285-5.386a.562.562 0 00-.182-.557l-4.204-3.602a.562.562 0 01.321-.988l5.518-.442a.563.563 0 00.475-.345L11.48 3.5z" />
+        </svg>
+      ),
+    };
+
+    // ─── Spinner ──────────────────────────────────────────────────────────────
+    const Spinner = () => (
+      <div className="flex items-center justify-center py-20">
+        <div className="w-10 h-10 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin" />
+      </div>
+    );
+
+    // ─── Navbar ───────────────────────────────────────────────────────────────
+    const Navbar = () => {
+      const { view, navigate, goBack, goHome, canManage, history, refresh, loading, lang, setLang, t, signOut,
+              username, role, breakGlass } = useApp();
+      const [pwModal, setPwModal] = useState(null);
+      return (
+        <nav className="bg-indigo-700 text-white shadow-lg sticky top-0 z-50">
+          <div className="max-w-3xl mx-auto px-4 py-3 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              {history.length > 0 && (
+                <button onClick={goBack} className="p-1.5 rounded-lg hover:bg-indigo-600 transition"><I.Back /></button>
+              )}
+              <button onClick={goHome} className="font-bold text-lg tracking-wide select-none">
+                {t.appName}
+              </button>
+            </div>
+            <div className="flex items-center gap-1">
+              <button onClick={() => setLang(lang === 'en' ? 'zh' : 'en')}
+                className="px-2.5 py-1.5 rounded-lg text-sm font-bold hover:bg-indigo-600 transition border border-indigo-500">
+                {t.langToggle}
+              </button>
+              <button onClick={refresh} className={`p-2 rounded-lg transition hover:bg-indigo-600 ${loading ? 'animate-spin' : ''}`} title={t.navRefresh} aria-label={t.navRefresh}>
+                <I.Refresh />
+              </button>
+              <button onClick={goHome} title={t.navHome} aria-label={t.navHome}
+                className={`p-2 rounded-lg transition ${view.name==='home' ? 'bg-indigo-500' : 'hover:bg-indigo-600'}`}>
+                <I.Home />
+              </button>
+              <button onClick={() => navigate({ name:'history' })} title={t.navHistory} aria-label={t.navHistory}
+                className={`p-2 rounded-lg transition ${view.name==='history' ? 'bg-indigo-500' : 'hover:bg-indigo-600'}`}>
+                <I.History />
+              </button>
+              <button onClick={() => navigate({ name:'admin' })} title={t.navManage} aria-label={t.navManage}
+                className={`p-2 rounded-lg transition ${view.name==='admin' ? 'bg-indigo-500' : 'hover:bg-indigo-600'} ${canManage ? 'text-yellow-300' : ''}`}>
+                <I.Settings />
+              </button>
+              {/* Break-glass has no account, so there is no password to change here. */}
+              {!breakGlass && (
+                <button onClick={() => setPwModal({ currentPassword:'', newPassword:'', confirm:'' })}
+                  className="p-2 rounded-lg transition hover:bg-indigo-600" title={t.changePassword} aria-label={t.changePassword}>
+                  <I.Key />
+                </button>
+              )}
+              <button onClick={signOut} className="p-2 rounded-lg transition hover:bg-indigo-600" title={t.signOut} aria-label={t.signOut}>
+                <I.SignOut />
+              </button>
+            </div>
+          </div>
+          {username && (
+            <div className="max-w-3xl mx-auto px-4 pb-1.5 -mt-1 text-[11px] text-indigo-200">
+              {username} · {t.roleNames[role] || role}
+            </div>
+          )}
+          {pwModal && <ChangePasswordModal form={pwModal} setForm={setPwModal} onClose={() => setPwModal(null)} />}
+        </nav>
+      );
+    };
+
+    // Requires the current password, so someone using a left-open screen can't
+    // lock the real owner out of their account.
+    const ChangePasswordModal = ({ form, setForm, onClose }) => {
+      const { t } = useApp();
+      const [err,  setErr]  = useState('');
+      const [busy, setBusy] = useState(false);
+
+      const submit = async (e) => {
+        e.preventDefault();
+        if (busy) return;
+        setErr('');
+        if (form.newPassword !== form.confirm) { setErr(t.passwordsDiffer); return; }
+        setBusy(true);
+        try {
+          await api.post('/api/me/password', {
+            currentPassword: form.currentPassword, newPassword: form.newPassword,
+          });
+          onClose();
+          alert(t.passwordChanged);
+        } catch (ex) {
+          setErr(ex.message || t.wrongPassword);
+        } finally {
+          setBusy(false);
+        }
+      };
+
+      return (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-sm text-gray-800">
+            <h2 className="text-xl font-bold mb-1">{t.changePassword}</h2>
+            <p className="text-sm text-gray-500 mb-4">{t.changePasswordBody}</p>
+            <form onSubmit={submit} className="space-y-3">
+              <TextField type="password" value={form.currentPassword}
+                onChange={v => setForm(f=>({...f,currentPassword:v}))} placeholder={t.currentPasswordPh} autoFocus />
+              <TextField type="password" value={form.newPassword}
+                onChange={v => setForm(f=>({...f,newPassword:v}))} placeholder={t.newPasswordPh} />
+              <TextField type="password" value={form.confirm}
+                onChange={v => setForm(f=>({...f,confirm:v}))} placeholder={t.confirmPasswordPh} />
+              {err && <p className="text-red-500 text-xs">{err}</p>}
+              <div className="flex gap-2 pt-1">
+                <button type="button" onClick={onClose} className="flex-1 py-2 border border-gray-300 rounded-lg text-gray-600 hover:bg-gray-50 text-sm">{t.cancel}</button>
+                <button type="submit" disabled={busy || !form.currentPassword || !form.newPassword}
+                  className="flex-1 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-semibold text-sm disabled:opacity-40">
+                  {busy ? t.saving : t.save}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      );
+    };
+
+    // ─── Home View ────────────────────────────────────────────────────────────
+    const HomeView = () => {
+      const { data, navigate, loading, t, lang } = useApp();
+      if (loading) return <Spinner />;
+
+      const today = todayStr();
+      const dow = new Date().getDay();
+
+      const nextOcc = (d) => {
+        const diff = (d - dow + 7) % 7;
+        if (diff === 0) return t.today;
+        if (diff === 1) return t.tomorrow;
+        return t.inDays(diff);
+      };
+
+      return (
+        <div className="max-w-3xl mx-auto px-4 py-6">
+          <div className="mb-6">
+            <h1 className="text-2xl font-bold text-gray-800">{t.meetingAttendance}</h1>
+            <p className="text-gray-500 mt-0.5 text-sm">{fmtDate(today, t.locale)}</p>
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-2 mb-8">
+            {data.meetings.map(m => {
+              const groups = data.groups.filter(g => g.meetingIds.includes(m.id));
+              const recorded = data.attendance.filter(a => a.meetingId === m.id && a.date === today).length;
+              const isToday = m.dayOfWeek === dow;
+              return (
+                <div key={m.id} onClick={() => navigate({ name:'meeting', meetingId:m.id })}
+                  className={`bg-white rounded-2xl shadow-sm border-2 p-5 cursor-pointer hover:shadow-md transition-shadow ${isToday ? 'border-indigo-400' : 'border-gray-100'}`}>
+                  {isToday && <span className="inline-block bg-indigo-100 text-indigo-700 text-xs font-semibold px-2 py-0.5 rounded-full mb-2">{t.today.toUpperCase()}</span>}
+                  <h2 className="text-lg font-bold text-gray-800">{localizedName(m, lang)}</h2>
+                  <p className="text-sm text-gray-500 mb-3">{t.every} {t.days[m.dayOfWeek]} · {nextOcc(m.dayOfWeek)}</p>
+                  <div className="flex gap-4 text-sm text-gray-600">
+                    <span className="flex items-center gap-1"><I.Users />{t.groupCount(groups.length)}</span>
+                    <span className={`font-medium ${recorded > 0 ? 'text-green-600' : 'text-gray-400'}`}>
+                      {recorded > 0 ? t.sessionsRecorded(recorded) : t.noRecordsToday}
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">{t.overview}</h2>
+          <div className="grid grid-cols-3 gap-3">
+            {[
+              { label: t.labelPeople,   value: activePeople(data).length },
+              { label: t.labelGroups,   value: data.groups.length },
+              { label: t.labelSessions, value: data.attendance.length },
+            ].map(s => (
+              <div key={s.label} className="bg-white rounded-xl p-4 text-center border border-gray-100 shadow-sm">
+                <div className="text-2xl font-bold text-indigo-600">{s.value}</div>
+                <div className="text-xs text-gray-500 mt-1">{s.label}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      );
+    };
+
+    // ─── Meeting Detail ───────────────────────────────────────────────────────
+    // Groups pinned by the signed-in user (a personal preference, not a
+    // permission — see toggleFocusGroup) float to the top; everything else
+    // collapses under "Others" until expanded. With nothing pinned yet, every
+    // group just lists normally, unchanged from before this existed.
+    const MeetingView = () => {
+      const { data, view, navigate, loading, t, lang, focusGroupIds, toggleFocusGroup } = useApp();
+      const [showOthers, setShowOthers] = useState(false);
+      if (loading) return <Spinner />;
+
+      const meeting = data.meetings.find(m => m.id === view.meetingId);
+      const groups  = data.groups.filter(g => g.meetingIds.includes(view.meetingId));
+      const today   = todayStr();
+      if (!meeting) return null;
+
+      const focusGroups = groups.filter(g => focusGroupIds.includes(g.id));
+      const otherGroups = groups.filter(g => !focusGroupIds.includes(g.id));
+
+      const GroupCard = ({ g }) => {
+        const members = data.people.filter(p => g.memberIds.includes(p.id));
+        const rec = data.attendance.find(a => a.meetingId===view.meetingId && a.groupId===g.id && a.date===today);
+        const presentCount = rec ? rec.records.filter(r => r.present).length : null;
+        const pinned = focusGroupIds.includes(g.id);
+        return (
+          <div onClick={() => navigate({ name:'attendance', meetingId:view.meetingId, groupId:g.id })}
+            className="group bg-white rounded-2xl shadow-sm border border-gray-100 p-5 cursor-pointer hover:shadow-md transition-shadow">
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-start gap-2 min-w-0">
+                <button type="button" title={pinned ? t.unpinGroup : t.pinGroup}
+                  onClick={(e) => { e.stopPropagation(); toggleFocusGroup(g.id); }}
+                  className={`shrink-0 mt-0.5 ${pinned ? 'text-amber-400 hover:text-amber-500' : 'text-gray-300 hover:text-gray-400'}`}>
+                  <I.Star filled={pinned} />
+                </button>
+                <div className="min-w-0">
+                  <h3 className="font-semibold text-gray-800">{localizedName(g, lang)}</h3>
+                  <p className="text-sm text-gray-500">{t.memberCount(members.length)}</p>
+                </div>
+              </div>
+              <div className="text-right shrink-0">
+                {rec ? (
+                  <>
+                    <span className="inline-block bg-green-100 text-green-700 text-xs font-semibold px-2 py-0.5 rounded-full">{t.recorded}</span>
+                    <p className="text-xs text-gray-500 mt-1">{t.presentOf(presentCount, members.length)}</p>
+                  </>
+                ) : (
+                  <span className="inline-block bg-gray-100 text-gray-500 text-xs px-2 py-0.5 rounded-full">{t.noRecord}</span>
+                )}
+              </div>
+            </div>
+            <div className="mt-3 hidden group-hover:flex flex-wrap gap-1">
+              {members.map(p => (
+                <span key={p.id} className="text-xs bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded-full">
+                  {p.firstName} {p.lastName}
+                </span>
+              ))}
+            </div>
+          </div>
+        );
+      };
+
+      return (
+        <div className="max-w-3xl mx-auto px-4 py-6">
+          <div className="mb-6">
+            <h1 className="text-2xl font-bold text-gray-800">{localizedName(meeting, lang)}</h1>
+            <p className="text-gray-500 text-sm">{t.every} {t.days[meeting.dayOfWeek]}</p>
+          </div>
+
+          {groups.length === 0 ? (
+            <div className="bg-white rounded-2xl p-10 text-center border border-gray-100 shadow-sm text-gray-400">
+              {t.noGroupsAdmin}
+            </div>
+          ) : focusGroups.length === 0 ? (
+            <div className="space-y-3">
+              {groups.map(g => <GroupCard key={g.id} g={g} />)}
+            </div>
+          ) : (
+            <>
+              <div className="space-y-3 mb-3">
+                {focusGroups.map(g => <GroupCard key={g.id} g={g} />)}
+              </div>
+              {otherGroups.length > 0 && (
+                <div>
+                  <button type="button" onClick={() => setShowOthers(s => !s)}
+                    className="flex items-center gap-1.5 text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3 hover:text-gray-700">
+                    <span className={`transition-transform ${showOthers ? 'rotate-180' : ''}`}><I.Chevron /></span>
+                    {t.othersGroups(otherGroups.length)}
+                  </button>
+                  {showOthers && (
+                    <div className="space-y-3">
+                      {otherGroups.map(g => <GroupCard key={g.id} g={g} />)}
+                    </div>
+                  )}
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      );
+    };
+
+    // ─── Attendance Taking ────────────────────────────────────────────────────
+    const AttendanceView = () => {
+      const { data, refresh, view, loading, t, lang, canManage } = useApp();
+
+      const meeting = data.meetings.find(m => m.id === view.meetingId);
+      const group   = data.groups.find(g => g.id === view.groupId);
+
+      const [date,     setDate]     = useState(todayStr);
+      const [present,  setPresent]  = useState({});
+      const [saving,   setSaving]   = useState(false);
+      const [dirty,    setDirty]    = useState(false);   // unsaved local marks
+      const [rev,      setRev]      = useState(null);    // version this edit is based on
+      const [conflict, setConflict] = useState(null);    // { rev, records } from a 409
+
+      const members = group ? data.people.filter(p => group.memberIds.includes(p.id)) : [];
+
+      // The server's copy of the session currently on screen.
+      const stored     = group ? data.attendance.find(
+        a => a.meetingId === view.meetingId && a.groupId === view.groupId && a.date === date
+      ) : null;
+      const storedRev  = stored ? (stored.rev || 0) : null;
+
+      const buildPresent = (recs) => {
+        const init = {};
+        members.forEach(m => { init[m.id] = recs ? (recs.find(r => r.personId===m.id)?.present ?? false) : false; });
+        return init;
+      };
+
+      // Re-sync when the session on screen changes *or* when the server copy does.
+      // `data` was missing from these deps, so refreshing left the ticks showing
+      // stale state and the next save wrote that stale state back over whatever
+      // had landed in the meantime. Unsaved marks are never discarded — if the
+      // server moved under us while editing, `outOfDate` warns instead.
+      useEffect(() => {
+        if (!group || dirty) return;
+        setPresent(buildPresent(stored ? stored.records : null));
+        setRev(storedRev);
+        setConflict(null);
+      }, [date, view.groupId, view.meetingId, data, dirty]);
+
+      const touch   = () => { setDirty(true); setConflict(null); };
+      const toggle  = (id) => { setPresent(p => ({ ...p, [id]: !p[id] })); touch(); };
+      const markAll = (v)  => { const m={}; members.forEach(p=>m[p.id]=v); setPresent(m); touch(); };
+
+      const saved = !dirty && rev !== null;
+      // Someone else saved this session since we loaded it, and we have marks
+      // pending. Surfaced before they hit Save, so it isn't a nasty surprise.
+      const outOfDate = dirty && storedRev !== rev;
+
+      // `basedOn` lets the conflict banner retry against the version that beat
+      // us — a deliberate overwrite, not a bypass of the check.
+      const saveRecord = async (basedOn) => {
+        setSaving(true);
+        try {
+          const res = await api.post('/api/attendance', {
+            meetingId: view.meetingId,
+            groupId:   view.groupId,
+            date,
+            records: members.map(p => ({ personId:p.id, present:!!present[p.id] })),
+            rev: basedOn === undefined ? rev : basedOn,
+          });
+          // Pull the authoritative copy *before* clearing `dirty`, so the sync
+          // effect re-runs against fresh data rather than briefly restoring the
+          // pre-save state it still has in hand.
+          await refresh();
+          setConflict(null);
+          setDirty(false);
+          setRev(res.rev);
+        } catch (e) {
+          // 409 means another leader saved first. Keep this user's marks on screen
+          // and let them decide, instead of silently discarding either version.
+          if (e.status === 409 && e.body && e.body.conflict) setConflict(e.body.conflict);
+          else alert(t.errSaving(e.message));
+        } finally {
+          setSaving(false);
+        }
+      };
+
+      // Discard our marks and adopt what's stored. Refreshing is what actually
+      // loads their version — setting `present` from the 409 payload directly
+      // would be undone by the sync effect, which still holds the older copy.
+      const acceptTheirs = async () => {
+        setSaving(true);
+        try {
+          await refresh();
+          setConflict(null);
+          setDirty(false);
+        } finally {
+          setSaving(false);
+        }
+      };
+
+      if (loading) return <Spinner />;
+      if (!meeting || !group) return null;
+
+      const presentCount = Object.values(present).filter(Boolean).length;
+
+      return (
+        <div className="max-w-3xl mx-auto px-4 py-6">
+          <p className="text-sm font-medium text-indigo-600 mb-1">{localizedName(meeting, lang)}</p>
+          <h1 className="text-2xl font-bold text-gray-800 mb-5">{localizedName(group, lang)}</h1>
+
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 mb-4">
+            <label className="block text-sm font-medium text-gray-700 mb-1">{t.sessionDate}</label>
+            <input type="date" value={date} onChange={e => { setDate(e.target.value); setDirty(false); setConflict(null); }}
+              className="border border-gray-300 rounded-lg px-3 py-2 text-sm w-full focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+          </div>
+
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 mb-4">
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="font-semibold text-gray-700">{t.presentCount(presentCount, members.length)}</h2>
+              {canManage && (
+                <div className="flex gap-2">
+                  <button onClick={() => markAll(true)}  className="text-xs bg-green-100 text-green-700 px-2.5 py-1 rounded-lg hover:bg-green-200 font-medium">{t.allPresent}</button>
+                  <button onClick={() => markAll(false)} className="text-xs bg-red-100 text-red-700 px-2.5 py-1 rounded-lg hover:bg-red-200 font-medium">{t.allAbsent}</button>
+                </div>
+              )}
+            </div>
+
+            <div className="space-y-2">
+              {members.map(p => (
+                <div key={p.id} onClick={canManage ? () => toggle(p.id) : undefined}
+                  className={`flex items-center gap-3 p-3 rounded-xl transition select-none ${canManage ? 'cursor-pointer' : ''} ${present[p.id] ? 'bg-green-50 border border-green-200' : `bg-gray-50 border border-gray-100 ${canManage ? 'hover:bg-gray-100' : ''}`}`}>
+                  <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center shrink-0 text-white transition-colors ${present[p.id] ? 'bg-green-500 border-green-500' : 'border-gray-300'}`}>
+                    {present[p.id] && <I.Check />}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="font-medium text-gray-800 truncate">{p.firstName} {p.lastName}</div>
+                    <div className="text-xs text-gray-500">{p.phone}</div>
+                  </div>
+                  <span className={`text-xs font-semibold shrink-0 ${present[p.id] ? 'text-green-600' : 'text-gray-400'}`}>
+                    {present[p.id] ? t.presentLabel : t.absentLabel}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {!canManage && (
+            <p className="text-sm text-gray-500 bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-center">
+              {t.viewOnlyAttendance}
+            </p>
+          )}
+
+          {canManage && conflict && (
+            <div className="bg-amber-50 border border-amber-300 rounded-2xl p-4 mb-4">
+              <p className="font-semibold text-amber-900 text-sm mb-1">{t.conflictTitle}</p>
+              <p className="text-sm text-amber-800 mb-3">
+                {t.conflictBody(
+                  conflict.records.filter(r => r.present).length,
+                  Object.values(present).filter(Boolean).length
+                )}
+              </p>
+              <div className="flex flex-col sm:flex-row gap-2">
+                <button onClick={acceptTheirs} disabled={saving}
+                  className="flex-1 py-2 bg-white border border-amber-400 text-amber-900 rounded-lg text-sm font-semibold hover:bg-amber-100">
+                  {t.useTheirs}
+                </button>
+                <button onClick={() => saveRecord(conflict.rev)} disabled={saving}
+                  className="flex-1 py-2 bg-amber-600 text-white rounded-lg text-sm font-semibold hover:bg-amber-700">
+                  {t.keepMine}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {canManage && outOfDate && !conflict && (
+            <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 mb-3">
+              {t.outOfDateNotice}
+            </p>
+          )}
+
+          {canManage && (
+            <button onClick={() => saveRecord()} disabled={saving || saved}
+              className={`w-full py-3 rounded-xl font-semibold text-white transition-colors ${saved ? 'bg-green-500 cursor-default' : saving ? 'bg-indigo-400 cursor-wait' : 'bg-indigo-600 hover:bg-indigo-700'}`}>
+              {saving ? t.saving : saved ? t.attendanceSaved : t.saveAttendance}
+            </button>
+          )}
+        </div>
+      );
+    };
+
+    // ─── Attendance Chart ─────────────────────────────────────────────────────
+    const CHART_COLORS = ['#6366f1','#10b981','#f59e0b','#ef4444','#8b5cf6','#06b6d4'];
+    const shortDate = (s) => new Date(s + 'T00:00:00').toLocaleDateString('en-US', { month:'short', day:'numeric' });
+
+    const AttendanceChart = ({ data, filter, presentTip, title, lang }) => {
+      const canvasRef = useRef(null);
+      const chartRef  = useRef(null);
+
+      const { labels, datasets } = useMemo(() => {
+        const relevant = filter === 'all'
+          ? data.attendance
+          : data.attendance.filter(a => a.meetingId === filter);
+
+        const dates = [...new Set(relevant.map(a => a.date))].sort();
+        if (!dates.length) return { labels: [], datasets: [] };
+
+        const meetings = filter === 'all'
+          ? data.meetings
+          : data.meetings.filter(m => m.id === filter);
+
+        const ds = meetings.map((m, i) => {
+          const recs = relevant.filter(a => a.meetingId === m.id);
+          return {
+            label: localizedName(m, lang),
+            data: dates.map(date => {
+              const day = recs.filter(a => a.date === date);
+              if (!day.length) return null;
+              return day.reduce((sum, r) => sum + r.records.filter(x => x.present).length, 0);
+            }),
+            borderColor: CHART_COLORS[i % CHART_COLORS.length],
+            backgroundColor: meetings.length === 1 ? 'rgba(99,102,241,0.08)' : 'transparent',
+            fill: meetings.length === 1,
+            tension: 0.35,
+            pointRadius: 4,
+            pointHoverRadius: 6,
+            spanGaps: false,
+          };
+        });
+
+        return { labels: dates.map(shortDate), datasets: ds };
+      }, [data.attendance, data.meetings, filter, lang]);
+
+      useEffect(() => {
+        if (!canvasRef.current || !labels.length) return;
+        if (chartRef.current) { chartRef.current.destroy(); chartRef.current = null; }
+
+        chartRef.current = new Chart(canvasRef.current, {
+          type: 'line',
+          data: { labels, datasets },
+          options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            interaction: { mode:'index', intersect:false },
+            plugins: {
+              legend: {
+                display: datasets.length > 1,
+                position: 'top',
+                labels: { boxWidth:12, font:{ size:12 } },
+              },
+              tooltip: {
+                callbacks: { label: presentTip },
+              },
+            },
+            scales: {
+              x: { grid:{ display:false }, ticks:{ font:{ size:11 } } },
+              y: {
+                beginAtZero: true,
+                ticks: { stepSize:1, font:{ size:11 } },
+                grid: { color:'rgba(0,0,0,0.05)' },
+              },
+            },
+          },
+        });
+
+        return () => { if (chartRef.current) { chartRef.current.destroy(); chartRef.current = null; } };
+      }, [labels, datasets, presentTip]);
+
+      if (!labels.length) return null;
+
+      return (
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 mb-4">
+          <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">{title}</h2>
+          <canvas ref={canvasRef} />
+        </div>
+      );
+    };
+
+    // ─── Group Bar Chart ──────────────────────────────────────────────────────
+    const GroupBarChart = ({ group, data, presentLabel, absentLabel, lang }) => {
+      const canvasRef = useRef(null);
+      const chartRef  = useRef(null);
+
+      const { labels, presentData, absentData } = useMemo(() => {
+        const recs  = data.attendance.filter(a => a.groupId === group.id);
+        const dates = [...recs.map(a => a.date)].sort();
+        return {
+          labels:      dates.map(shortDate),
+          presentData: dates.map(d => { const r = recs.find(a => a.date === d); return r ? r.records.filter(x => x.present).length : 0; }),
+          absentData:  dates.map(d => { const r = recs.find(a => a.date === d); return r ? r.records.filter(x => !x.present).length : 0; }),
+        };
+      }, [data.attendance, group.id]);
+
+      useEffect(() => {
+        if (!canvasRef.current || !labels.length) return;
+        if (chartRef.current) { chartRef.current.destroy(); chartRef.current = null; }
+
+        chartRef.current = new Chart(canvasRef.current, {
+          type: 'bar',
+          data: {
+            labels,
+            datasets: [
+              { label: presentLabel, data:presentData, backgroundColor:'rgba(99,102,241,0.85)', borderRadius:4, stack:'s' },
+              { label: absentLabel,  data:absentData,  backgroundColor:'rgba(209,213,219,0.7)', borderRadius:4, stack:'s' },
+            ],
+          },
+          options: {
+            responsive: true,
+            plugins: {
+              legend: { position:'top', labels:{ boxWidth:10, font:{ size:11 } } },
+              tooltip: { callbacks: { label: ctx => ` ${ctx.dataset.label}: ${ctx.parsed.y}` } },
+            },
+            scales: {
+              x: { stacked:true, grid:{ display:false }, ticks:{ font:{ size:10 } } },
+              y: { stacked:true, beginAtZero:true, ticks:{ stepSize:1, font:{ size:10 } }, grid:{ color:'rgba(0,0,0,0.04)' } },
+            },
+          },
+        });
+
+        return () => { if (chartRef.current) { chartRef.current.destroy(); chartRef.current = null; } };
+      }, [labels, presentData, absentData, presentLabel, absentLabel]);
+
+      if (!labels.length) return null;
+
+      const meetingNames = data.meetings.filter(m => group.meetingIds.includes(m.id)).map(m => localizedName(m, lang)).join(' · ');
+      return (
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4">
+          <p className="font-semibold text-gray-800 text-sm">{localizedName(group, lang)}</p>
+          <p className="text-xs text-gray-400 mb-2">{meetingNames}</p>
+          <canvas ref={canvasRef} />
+        </div>
+      );
+    };
+
+    // ─── History View ─────────────────────────────────────────────────────────
+    const HistoryView = () => {
+      const { data, loading, t, lang } = useApp();
+      const [filter, setFilter] = useState('all');
+      if (loading) return <Spinner />;
+
+      const filtered = data.attendance.filter(a => filter === 'all' || a.meetingId === filter);
+
+      const byDate = filtered.reduce((acc, rec) => {
+        (acc[rec.date] = acc[rec.date] || []).push(rec);
+        return acc;
+      }, {});
+      const sortedDates = Object.keys(byDate).sort((a, b) => b.localeCompare(a));
+
+      const chartGroups = (filter === 'all' ? data.groups : data.groups.filter(g => g.meetingIds.includes(filter)))
+        .filter(g => data.attendance.some(a => a.groupId === g.id));
+
+      const empty = (
+        <div className="bg-white rounded-2xl p-10 text-center border border-gray-100 shadow-sm text-gray-400">
+          {t.noRecords}
+        </div>
+      );
+
+      return (
+        <div className="max-w-screen-xl mx-auto px-4 py-6">
+          <h1 className="text-2xl font-bold text-gray-800 mb-4">{t.attendanceHistory}</h1>
+
+          <select value={filter} onChange={e => setFilter(e.target.value)}
+            className="border border-gray-300 rounded-xl px-3 py-2 text-sm mb-4 focus:outline-none focus:ring-2 focus:ring-indigo-400 bg-white shadow-sm" style={{width:'280px'}}>
+            <option value="all">{t.allMeetings}</option>
+            {data.meetings.map(m => <option key={m.id} value={m.id}>{localizedName(m, lang)}</option>)}
+          </select>
+
+          {filtered.length === 0 ? empty : (
+            <div className="flex gap-6 items-start">
+
+              {/* ── Left: attendance list ── */}
+              <div className="w-1/2 min-w-0 space-y-5">
+                {sortedDates.length === 0 ? empty : sortedDates.map(date => (
+                  <div key={date}>
+                    <h2 className="text-sm font-semibold text-gray-500 mb-2 px-1">{fmtDate(date, t.locale)}</h2>
+                    <div className="space-y-2">
+                      {byDate[date].map(rec => {
+                        const meeting = data.meetings.find(m => m.id === rec.meetingId);
+                        const group   = data.groups.find(g => g.id === rec.groupId);
+                        const present = rec.records.filter(r => r.present).length;
+                        const total   = rec.records.length;
+                        const pct     = total ? Math.round((present/total)*100) : 0;
+                        return (
+                          <div key={rec.id} className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4">
+                            <div className="flex items-start justify-between gap-2 mb-2">
+                              <div>
+                                <p className="text-xs text-gray-400 font-medium uppercase tracking-wide">{meeting ? localizedName(meeting, lang) : ''}</p>
+                                <p className="font-semibold text-gray-800">{group ? localizedName(group, lang) : ''}</p>
+                              </div>
+                              <div className="text-right shrink-0">
+                                <div className="text-2xl font-bold text-indigo-600">{pct}%</div>
+                                <div className="text-xs text-gray-500">{t.presentOf(present, total)}</div>
+                              </div>
+                            </div>
+                            <div className="h-1.5 bg-gray-100 rounded-full mb-3">
+                              <div className="h-1.5 bg-indigo-500 rounded-full" style={{ width:`${pct}%` }} />
+                            </div>
+                            <div className="flex flex-wrap gap-1">
+                              {rec.records.map(r => {
+                                const p = data.people.find(x => x.id === r.personId);
+                                if (!p) return null;
+                                return (
+                                  <span key={r.personId} className={`text-xs px-2 py-0.5 rounded-full font-medium ${r.present ? 'bg-green-100 text-green-700' : 'bg-red-50 text-red-500'} ${p.archived ? 'italic opacity-70' : ''}`}
+                                    title={p.archived ? t.archivedTip : undefined}>
+                                    {p.firstName} {p.lastName}
+                                  </span>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* ── Right: charts ── */}
+              <div className="w-1/2 min-w-0 space-y-4">
+                <AttendanceChart data={data} filter={filter} presentTip={t.chartPresentTip} title={t.attendanceTrend} lang={lang} />
+                {chartGroups.length > 0 && (
+                  <>
+                    <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wider px-1">{t.byGroup}</h2>
+                    {chartGroups.map(g => (
+                      <GroupBarChart key={g.id} group={g} data={data}
+                        presentLabel={t.chartPresentLabel} absentLabel={t.chartAbsentLabel} lang={lang} />
+                    ))}
+                  </>
+                )}
+              </div>
+
+            </div>
+          )}
+        </div>
+      );
+    };
+
+    // ─── Sign-in ──────────────────────────────────────────────────────────────
+    // Shared by the app gate and the admin gate. Both post to /api/login; they
+    // differ only in copy and in which password the server will accept.
+    const TextField = ({ value, onChange, placeholder, autoFocus, type = 'text', autoComplete }) => (
+      <input type={type} value={value} onChange={e => onChange(e.target.value)}
+        placeholder={placeholder} autoFocus={autoFocus} autoComplete={autoComplete}
+        className="border border-gray-300 rounded-lg px-3 py-2.5 w-full focus:outline-none focus:ring-2 focus:ring-indigo-400 text-sm" />
+    );
+
+    // Full-page gate. Nothing in the app renders until the server confirms a
+    // session. Three modes: sign in with an account, create one with the join
+    // code, or the break-glass admin password for recovery.
+    const SignInScreen = () => {
+      const { signIn, register, signInBreakGlass, t, lang, setLang, authNotice, apiError } = useApp();
+      const [mode, setMode] = useState('signin');   // 'signin' | 'register' | 'breakglass'
+      const [f,    setF]    = useState({ username:'', password:'', displayName:'', confirm:'' });
+      const [err,  setErr]  = useState('');
+      const [busy, setBusy] = useState(false);
+
+      const set   = (k) => (v) => setF(prev => ({ ...prev, [k]: v }));
+      const go    = (m) => { setMode(m); setErr(''); setF({ username:'', password:'', displayName:'', confirm:'' }); };
+
+      const submit = async (e) => {
+        e.preventDefault();
+        if (busy) return;
+        setErr('');
+        if (mode === 'register' && f.password !== f.confirm) { setErr(t.passwordsDiffer); return; }
+        setBusy(true);
+        try {
+          if (mode === 'signin')     await signIn(f.username, f.password);
+          if (mode === 'register')   await register({ username:f.username, password:f.password, displayName:f.displayName });
+          if (mode === 'breakglass') await signInBreakGlass(f.password);
+        } catch (ex) {
+          setErr(ex.status === 429 ? t.tooManyAttempts : (ex.message || t.wrongPassword));
+          setF(prev => ({ ...prev, password:'', confirm:'' }));
+        } finally {
+          setBusy(false);
+        }
+      };
+
+      const ready = mode === 'signin'   ? f.username && f.password
+                  : mode === 'register' ? f.username && f.password && f.confirm
+                  : f.password;
+
+      return (
+        <div className="min-h-screen flex items-center justify-center p-4" style={{ position:'relative' }}>
+          <BibleBackground />
+          <div className="w-full max-w-sm" style={{ position:'relative', zIndex:1 }}>
+            <div className="bg-white rounded-2xl shadow-xl border border-gray-100 p-7">
+              <div className="flex items-start justify-between gap-3 mb-5">
+                <div>
+                  <h1 className="text-xl font-bold text-gray-800">{t.signInTitle}</h1>
+                  <p className="text-sm text-gray-500 mt-0.5">
+                    {mode === 'register' ? t.registerSubtitle : mode === 'breakglass' ? t.breakGlassSubtitle : t.signInSubtitle}
+                  </p>
+                </div>
+                <button onClick={() => setLang(lang === 'en' ? 'zh' : 'en')}
+                  className="text-xs font-bold text-indigo-600 border border-indigo-200 rounded-lg px-2 py-1 hover:bg-indigo-50 shrink-0">
+                  {t.langToggle}
+                </button>
+              </div>
+              {authNotice && <p className="bg-amber-50 border border-amber-200 text-amber-700 rounded-lg px-3 py-2 text-xs mb-3">{authNotice}</p>}
+              {apiError   && <p className="bg-red-50 border border-red-200 text-red-700 rounded-lg px-3 py-2 text-xs mb-3">{apiError}</p>}
+
+              <form onSubmit={submit} className="space-y-3">
+                {mode !== 'breakglass' && (
+                  <TextField value={f.username} onChange={set('username')} placeholder={t.usernamePh}
+                    autoFocus autoComplete="username" />
+                )}
+                {mode === 'register' && (
+                  <TextField value={f.displayName} onChange={set('displayName')} placeholder={t.displayNamePh} />
+                )}
+                <TextField type="password" value={f.password} onChange={set('password')}
+                  placeholder={mode === 'breakglass' ? t.adminPasswordPh : t.passwordPh}
+                  autoFocus={mode === 'breakglass'}
+                  autoComplete={mode === 'register' ? 'new-password' : 'current-password'} />
+                {mode === 'register' && (
+                  <TextField type="password" value={f.confirm} onChange={set('confirm')}
+                    placeholder={t.confirmPasswordPh} autoComplete="new-password" />
+                )}
+                {mode === 'register' && <p className="text-xs text-gray-400">{t.registerHint}</p>}
+                {err && <p className="text-red-500 text-xs">{err}</p>}
+                <button type="submit" disabled={busy || !ready}
+                  className="w-full py-2.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-semibold text-sm disabled:opacity-40">
+                  {busy ? t.signingIn : mode === 'register' ? t.createAccount : t.login}
+                </button>
+              </form>
+
+              <div className="mt-4 pt-4 border-t border-gray-100 space-y-1.5 text-center">
+                {mode !== 'register' && (
+                  <button onClick={() => go('register')} className="block w-full text-xs text-indigo-600 hover:underline">{t.needAccount}</button>
+                )}
+                {mode !== 'signin' && (
+                  <button onClick={() => go('signin')} className="block w-full text-xs text-indigo-600 hover:underline">{t.haveAccount}</button>
+                )}
+                {mode !== 'breakglass' && (
+                  <button onClick={() => go('breakglass')} className="block w-full text-xs text-gray-400 hover:text-gray-600 hover:underline">{t.useBreakGlass}</button>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    };
+
+    // Roles now come from the account, so there is nothing to type here — a
+    // viewer needs an admin to grant them the role. Says who to ask and why.
+    const NoAccessNotice = ({ onCancel }) => {
+      const { t, username } = useApp();
+      return (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-sm">
+            <h2 className="text-xl font-bold text-gray-800 mb-1">{t.noAccessTitle}</h2>
+            <p className="text-sm text-gray-500 mb-4">{t.noAccessBody(username || '')}</p>
+            <button onClick={onCancel}
+              className="w-full py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-semibold text-sm">
+              {t.goBack}
+            </button>
+          </div>
+        </div>
+      );
+    };
+
+    // ─── Admin View ───────────────────────────────────────────────────────────
+    const TAB_IDS = ['groups', 'people', 'meetings', 'users'];
+
+    const AdminView = () => {
+      const { data, refresh, isAdmin, canManage, goBack, goHome, loading, t, lang } = useApp();
+      const [tab,  setTab]  = useState('groups');
+      const [busy, setBusy] = useState(false);
+
+      // Meetings and Users are admin-only, so super users never see those tabs.
+      // Resolved here rather than after the early returns, because the effect
+      // that loads users depends on it and hooks must run unconditionally.
+      const visibleTabs = TAB_IDS.filter(id => (id !== 'meetings' && id !== 'users') || isAdmin);
+      const activeTab   = visibleTabs.includes(tab) ? tab : visibleTabs[0];
+      const activeTabIsUsers = activeTab === 'users';
+
+      const run = async (fn) => {
+        setBusy(true);
+        try { await fn(); await refresh(); }
+        catch(e) { alert(t.errGeneric(e.message)); }
+        finally { setBusy(false); }
+      };
+
+      // ── Users (admin only) ──
+      // Kept out of /api/data: that payload goes to every signed-in viewer, and
+      // user records carry password salts and hashes.
+      const [users,   setUsers]   = useState(null);
+      const [uForm,   setUForm]   = useState(null);   // new-user form
+      const [pwReset, setPwReset] = useState(null);   // { id, username, password }
+
+      const loadUsers = useCallback(async () => {
+        try { setUsers(await api.get('/api/users')); }
+        catch (e) { if (e.status !== 401) alert(t.errGeneric(e.message)); }
+      }, [t]);
+
+      // Fetched only when the tab is opened, and only by an admin.
+      useEffect(() => { if (activeTabIsUsers) loadUsers(); }, [activeTabIsUsers, loadUsers]);
+
+      const runUsers = async (fn) => {
+        setBusy(true);
+        try { await fn(); await loadUsers(); }
+        catch (e) { alert(t.errGeneric(e.message)); }
+        finally { setBusy(false); }
+      };
+
+      const setUserRole = (u, role) => {
+        if (role === u.role) return;
+        if (!confirm(t.confirmRoleChange(u.username, t.roleNames[role]))) return;
+        runUsers(() => api.patch(`/api/users/${u.id}`, { role }));
+      };
+      const toggleUserActive = (u) => {
+        if (!confirm(u.active ? t.confirmDeactivate(u.username) : t.confirmReactivate(u.username))) return;
+        runUsers(() => api.patch(`/api/users/${u.id}`, { active: !u.active }));
+      };
+      const deleteUser = (u) => {
+        if (!confirm(t.confirmDeleteUser(u.username))) return;
+        runUsers(() => api.del(`/api/users/${u.id}`));
+      };
+      const saveNewUser = () => {
+        if (uForm.password !== uForm.confirm) return alert(t.passwordsDiffer);
+        runUsers(async () => {
+          await api.post('/api/users', {
+            username: uForm.username, password: uForm.password,
+            displayName: uForm.displayName, role: uForm.role,
+          });
+          setUForm(null);
+        });
+      };
+      const savePwReset = () => {
+        runUsers(async () => {
+          await api.post(`/api/users/${pwReset.id}/password`, { password: pwReset.password });
+          setPwReset(null);
+          alert(t.passwordResetDone);
+        });
+      };
+
+      // ── Group form ──
+      const [gForm,    setGForm]    = useState(null);
+      const [gEditing, setGEditing] = useState(null);
+
+      const openAddGroup  = ()  => { setGEditing(null); setGForm({ name:{en:'',zh:''}, meetingIds:data.meetings[0]?[data.meetings[0].id]:[], memberIds:[] }); };
+      const openEditGroup = (g) => { setGEditing(g.id); setGForm({ name:{...g.name}, meetingIds:[...g.meetingIds], memberIds:[...g.memberIds] }); };
+      const toggleGMember  = (id) => setGForm(f => ({ ...f, memberIds:  f.memberIds.includes(id)  ? f.memberIds.filter(x=>x!==id)  : [...f.memberIds, id] }));
+      const toggleGMeeting = (id) => setGForm(f => ({ ...f, meetingIds: f.meetingIds.includes(id) ? f.meetingIds.filter(x=>x!==id) : [...f.meetingIds, id] }));
+      const saveGroup = () => {
+        if (!gForm.name.en.trim() && !gForm.name.zh.trim()) return alert(t.groupNameRequired);
+        if (gForm.meetingIds.length === 0) return alert(t.groupMeetingsRequired);
+        run(async () => {
+          if (gEditing) await api.put(`/api/groups/${gEditing}`, gForm);
+          else          await api.post('/api/groups', gForm);
+          setGForm(null);
+        });
+      };
+      const deleteGroup = (id) => {
+        if (!confirm(t.confirmDeleteGroup)) return;
+        run(() => api.del(`/api/groups/${id}`));
+      };
+
+      // ── Person form ──
+      const [pForm,    setPForm]    = useState(null);
+      const [pEditing, setPEditing] = useState(null);
+      const [addMemberModal, setAddMemberModal] = useState(null);
+      const addForGroupRef = useRef(null);
+
+      const openAddPerson  = ()  => { setPEditing(null); setPForm({ firstName:'', lastName:'', phone:'' }); };
+      const openEditPerson = (p) => { setPEditing(p.id); setPForm({ firstName:p.firstName, lastName:p.lastName, phone:p.phone }); };
+      const savePerson = () => {
+        if (!pForm.firstName.trim() || !pForm.lastName.trim()) return alert(t.nameRequired);
+        run(async () => {
+          if (pEditing) {
+            await api.put(`/api/people/${pEditing}`, pForm);
+          } else {
+            const { id: newId } = await api.post('/api/people', pForm);
+            const gid = addForGroupRef.current;
+            if (gid) {
+              const g = data.groups.find(x => x.id === gid);
+              if (g) await api.put(`/api/groups/${g.id}`, { name: g.name, meetingIds: g.meetingIds, memberIds: [...g.memberIds, newId] });
+              addForGroupRef.current = null;
+            }
+          }
+          setPForm(null);
+        });
+      };
+      const deletePerson = (id) => {
+        if (!confirm(t.confirmDeletePerson)) return;
+        run(() => api.del(`/api/people/${id}`));
+      };
+      const removeMemberFromGroup = (groupId, personId) => {
+        const g = data.groups.find(x => x.id === groupId);
+        if (!g) return;
+        const memberIds = g.memberIds.filter(id => id !== personId);
+        if (!confirm(t.confirmRemoveMember)) return;
+        run(() => api.put(`/api/groups/${groupId}`, { name: g.name, meetingIds: g.meetingIds, memberIds }));
+      };
+      const addMemberToGroup = (groupId, personId) => {
+        const g = data.groups.find(x => x.id === groupId);
+        if (!g || g.memberIds.includes(personId)) return;
+        const conflict = groupClash(data, personId, g.meetingIds, groupId);
+        if (conflict) { alert(t.alreadyInGroup(localizedName(conflict, lang))); return; }
+        run(() => api.put(`/api/groups/${groupId}`, { name: g.name, meetingIds: g.meetingIds, memberIds: [...g.memberIds, personId] }));
+        setAddMemberModal(null);
+      };
+
+      // ── CSV import ──
+      const [csvImport, setCsvImport] = useState(null);
+      const [csvResult, setCsvResult] = useState(null);
+      const importFileRef = useRef(null);
+
+      const handleCSVFile = (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        e.target.value = '';
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+          const { rows, error } = parseCSV(ev.target.result);
+          if (error) { alert(error); return; }
+          setCsvImport({ rows });
+        };
+        reader.readAsText(file, 'UTF-8');
+      };
+
+      const doImport = () => {
+        const valid = (csvImport?.rows || []).filter(r => r.firstName && r.lastName);
+        if (!valid.length) { alert(t.noValidRows); return; }
+        run(async () => {
+          const res = await api.post('/api/people/import', { people: valid });
+          setCsvImport(null);
+          setCsvResult(res);
+        });
+      };
+
+      // ── Meeting form ──
+      const [mForm,    setMForm]    = useState(null);
+      const [mEditing, setMEditing] = useState(null);
+      const openEditMeeting = (m) => { setMEditing(m.id); setMForm({ name:{...m.name}, dayOfWeek:m.dayOfWeek }); };
+      const saveMeeting = () => {
+        if (!mForm.name.en.trim() && !mForm.name.zh.trim()) return alert(t.meetingNameRequired);
+        run(async () => {
+          if (mEditing) await api.put(`/api/meetings/${mEditing}`, mForm);
+          else          await api.post('/api/meetings', mForm);
+          setMForm(null);
+        });
+      };
+      const deleteMeeting = (id) => {
+        if (!confirm(t.confirmDeleteMeeting)) return;
+        run(() => api.del(`/api/meetings/${id}`));
+      };
+
+      // Role is server-assigned; this only decides which UI to show. Every
+      // management endpoint re-checks it independently.
+      if (!canManage) return <NoAccessNotice onCancel={goBack} />;
+      if (loading) return <Spinner />;
+
+      const personFields = [
+        [t.firstNameLabel, 'firstName', t.firstNamePh],
+        [t.lastNameLabel,  'lastName',  t.lastNamePh],
+        [t.phoneLabel,     'phone',     t.phonePh],
+      ];
+
+      return (
+        <div className="max-w-3xl mx-auto px-4 py-6">
+          <div className="flex items-center justify-between mb-5">
+            <div>
+              <h1 className="text-2xl font-bold text-gray-800">{isAdmin ? t.adminPanel : t.managePanel}</h1>
+              <p className="text-sm text-yellow-600 font-semibold">{isAdmin ? t.adminActive : t.superActive}</p>
+            </div>
+            <button onClick={goHome}
+              className="text-sm bg-gray-100 text-gray-600 px-3 py-1.5 rounded-lg hover:bg-gray-200 font-medium">
+              {t.exitAdmin}
+            </button>
+          </div>
+
+          {/* Tabs */}
+          <div className="flex gap-1 mb-5 bg-gray-100 rounded-xl p-1">
+            {visibleTabs.map(tabId => (
+              <button key={tabId} onClick={() => setTab(tabId)}
+                className={`flex-1 py-2 rounded-lg text-sm font-semibold transition capitalize ${activeTab===tabId ? 'bg-white shadow text-indigo-700' : 'text-gray-600 hover:text-gray-800'}`}>
+                {t.tabLabels[TAB_IDS.indexOf(tabId)]}
+              </button>
+            ))}
+          </div>
+
+          {/* ── Groups ── */}
+          {activeTab === 'groups' && (
+            <div>
+              <div className="flex justify-end mb-3">
+                <button onClick={openAddGroup} className="flex items-center gap-1.5 bg-indigo-600 text-white px-3 py-2 rounded-lg hover:bg-indigo-700 text-sm font-semibold">
+                  <I.Plus /> {t.newGroup}
+                </button>
+              </div>
+              {data.meetings.map(meeting => {
+                const groups = data.groups.filter(g => g.meetingIds.includes(meeting.id));
+                return (
+                  <div key={meeting.id} className="mb-5">
+                    <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">{localizedName(meeting, lang)}</h3>
+                    {groups.length === 0
+                      ? <p className="text-gray-400 text-sm italic ml-1">{t.noGroupsYet}</p>
+                      : <div className="space-y-3">
+                          {groups.map(g => {
+                            const members = data.people.filter(p => g.memberIds.includes(p.id));
+                            return (
+                              <div key={g.id} className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
+                                <div className="flex items-center justify-between mb-3">
+                                  <div>
+                                    <p className="font-semibold text-gray-800">{localizedName(g, lang)}</p>
+                                    <p className="text-sm text-gray-500">{t.memberCount(members.length)}</p>
+                                  </div>
+                                  <div className="flex gap-1">
+                                    <button onClick={() => openEditGroup(g)} className="p-2 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg"><I.Edit /></button>
+                                    <button onClick={() => deleteGroup(g.id)} className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg"><I.Trash /></button>
+                                  </div>
+                                </div>
+                                <div className="space-y-0.5 mb-3">
+                                  {members.map(p => (
+                                    <div key={p.id} className="flex items-center justify-between gap-2 px-2 py-1.5 rounded-lg hover:bg-gray-50 group">
+                                      <div className="min-w-0">
+                                        <span className="text-sm font-medium text-gray-800">{p.firstName} {p.lastName}</span>
+                                        {p.phone && <span className="text-xs text-gray-400 ml-2">{p.phone}</span>}
+                                      </div>
+                                      <div className="flex gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                                        <button onClick={() => openEditPerson(p)} className="p-1 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded"><I.Edit /></button>
+                                        <button onClick={() => removeMemberFromGroup(g.id, p.id)} className="p-1 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded">
+                                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7a4 4 0 11-8 0 4 4 0 018 0zM9 14a6 6 0 00-6 6v1h12v-1a6 6 0 00-6-6zM21 12h-6" />
+                                          </svg>
+                                        </button>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                                <button onClick={() => setAddMemberModal({ groupId: g.id })}
+                                  className="w-full flex items-center justify-center gap-1.5 text-sm text-indigo-600 border border-dashed border-indigo-300 rounded-lg py-1.5 hover:bg-indigo-50 transition">
+                                  <I.Plus /> {t.addMember}
+                                </button>
+                              </div>
+                            );
+                          })}
+                        </div>
+                    }
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* ── People ── */}
+          {activeTab === 'people' && (
+            <div>
+              {csvResult && (
+                <div className="mb-3 bg-green-50 border border-green-200 rounded-xl px-4 py-3 flex items-center justify-between">
+                  <span className="text-sm text-green-700 font-medium">{t.importedResult(csvResult)}</span>
+                  <button onClick={() => setCsvResult(null)} className="text-green-500 hover:text-green-700 text-lg leading-none">&times;</button>
+                </div>
+              )}
+              <div className="flex justify-end gap-2 mb-3">
+                <input ref={importFileRef} type="file" accept=".csv,text/csv" className="hidden" onChange={handleCSVFile} />
+                <button onClick={() => importFileRef.current.click()}
+                  className="flex items-center gap-1.5 bg-white border border-gray-300 text-gray-700 px-3 py-2 rounded-lg hover:bg-gray-50 text-sm font-semibold">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1M8 12l4 4m0 0l4-4m-4 4V4" />
+                  </svg>
+                  {t.importCSV}
+                </button>
+                <button onClick={openAddPerson} className="flex items-center gap-1.5 bg-indigo-600 text-white px-3 py-2 rounded-lg hover:bg-indigo-700 text-sm font-semibold">
+                  <I.Plus /> {t.newPerson}
+                </button>
+              </div>
+              {activePeople(data).length === 0
+                ? <p className="text-gray-400 text-sm italic">{t.noPeople}</p>
+                : <div className="space-y-2">
+                    {activePeople(data).map(p => {
+                      const inGroups = data.groups.filter(g => g.memberIds.includes(p.id)).length;
+                      return (
+                        <div key={p.id} className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <p className="font-semibold text-gray-800">{p.firstName} {p.lastName}</p>
+                              <p className="text-sm text-gray-500">{p.phone} · {t.groupCount(inGroups)}</p>
+                            </div>
+                            <div className="flex gap-1">
+                              <button onClick={() => openEditPerson(p)} className="p-2 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg"><I.Edit /></button>
+                              {/* Archiving reshapes past attendance, so it stays with admins. */}
+                              {isAdmin && (
+                                <button onClick={() => deletePerson(p.id)} className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg"><I.Trash /></button>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+              }
+            </div>
+          )}
+
+          {/* ── Meetings ── */}
+          {activeTab === 'meetings' && (
+            <div>
+              <div className="flex justify-end mb-3">
+                <button onClick={() => { setMEditing(null); setMForm({ name:{en:'',zh:''}, dayOfWeek:0 }); }}
+                  className="flex items-center gap-1.5 bg-indigo-600 text-white px-3 py-2 rounded-lg hover:bg-indigo-700 text-sm font-semibold">
+                  <I.Plus /> {t.newMeeting}
+                </button>
+              </div>
+              <div className="space-y-2">
+                {data.meetings.map(m => {
+                  const grpCount = data.groups.filter(g => g.meetingIds.includes(m.id)).length;
+                  return (
+                    <div key={m.id} className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="font-semibold text-gray-800">{localizedName(m, lang)}</p>
+                          <p className="text-sm text-gray-500">{t.every} {t.days[m.dayOfWeek]} · {t.groupCount(grpCount)}</p>
+                        </div>
+                        <div className="flex gap-1">
+                          <button onClick={() => openEditMeeting(m)} className="p-2 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg"><I.Edit /></button>
+                          <button onClick={() => deleteMeeting(m.id)} className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg"><I.Trash /></button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* ── Users ── */}
+          {activeTab === 'users' && (
+            <div>
+              <div className="flex justify-end mb-3">
+                <button onClick={() => setUForm({ username:'', displayName:'', password:'', confirm:'', role:'viewer' })}
+                  className="flex items-center gap-1.5 bg-indigo-600 text-white px-3 py-2 rounded-lg hover:bg-indigo-700 text-sm font-semibold">
+                  <I.Plus /> {t.newUser}
+                </button>
+              </div>
+
+              {/* People who registered themselves land here and can see nothing
+                  until an admin picks a role, so it needs to be obvious. */}
+              {users && users.users.some(u => u.role === 'pending' && u.active) && (
+                <p className="mb-3 text-sm text-amber-800 bg-amber-50 border border-amber-300 rounded-xl px-3 py-2 font-medium">
+                  {t.pendingWaiting(users.users.filter(u => u.role === 'pending' && u.active).length)}
+                </p>
+              )}
+
+              <p className="text-xs text-gray-500 mb-3">{t.usersHint}</p>
+
+              {users === null
+                ? <Spinner />
+                : users.users.length === 0
+                  ? <p className="text-gray-400 text-sm italic">{t.noUsers}</p>
+                  : <div className="space-y-2">
+                      {users.users.map(u => {
+                        const isSelf = u.id === users.self;
+                        return (
+                          <div key={u.id} className={`bg-white rounded-xl border shadow-sm p-4 ${!u.active ? 'border-gray-200 bg-gray-50' : u.role === 'pending' ? 'border-amber-300' : 'border-gray-100'}`}>
+                            <div className="flex items-start justify-between gap-3 flex-wrap">
+                              <div className="min-w-0">
+                                <p className="font-semibold text-gray-800">
+                                  {u.displayName}
+                                  {isSelf && <span className="ml-2 text-xs font-normal text-indigo-600">{t.youLabel}</span>}
+                                  {!u.active && <span className="ml-2 text-xs font-normal text-gray-500">{t.deactivatedLabel}</span>}
+                                </p>
+                                <p className="text-sm text-gray-500">@{u.username}</p>
+                              </div>
+                              <div className="flex items-center gap-1.5 shrink-0">
+                                <select value={u.role} onChange={e => setUserRole(u, e.target.value)}
+                                  className="border border-gray-300 rounded-lg px-2 py-1.5 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400">
+                                  {['pending','viewer','super','admin'].map(r => <option key={r} value={r}>{t.roleNames[r]}</option>)}
+                                </select>
+                                <button onClick={() => setPwReset({ id:u.id, username:u.username, password:'' })}
+                                  title={t.resetPassword}
+                                  className="px-2 py-1.5 text-xs border border-gray-300 rounded-lg text-gray-600 hover:bg-gray-50">
+                                  {t.resetPassword}
+                                </button>
+                                <button onClick={() => toggleUserActive(u)}
+                                  className="px-2 py-1.5 text-xs border border-gray-300 rounded-lg text-gray-600 hover:bg-gray-50">
+                                  {u.active ? t.deactivate : t.reactivate}
+                                </button>
+                                <button onClick={() => deleteUser(u)} className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg"><I.Trash /></button>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+              }
+
+              {users && users.breakGlass && (
+                <p className="mt-4 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
+                  {t.breakGlassWarning}
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* ── New User Modal ── */}
+          {uForm && (
+            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+              <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-sm">
+                <h2 className="text-xl font-bold text-gray-800 mb-4">{t.newUser}</h2>
+                <div className="space-y-3 mb-5">
+                  <TextField value={uForm.username}    onChange={v => setUForm(f=>({...f,username:v}))}    placeholder={t.usernamePh} autoFocus />
+                  <TextField value={uForm.displayName} onChange={v => setUForm(f=>({...f,displayName:v}))} placeholder={t.displayNamePh} />
+                  <TextField type="password" value={uForm.password} onChange={v => setUForm(f=>({...f,password:v}))} placeholder={t.passwordPh} />
+                  <TextField type="password" value={uForm.confirm}  onChange={v => setUForm(f=>({...f,confirm:v}))}  placeholder={t.confirmPasswordPh} />
+                  <select value={uForm.role} onChange={e => setUForm(f=>({...f,role:e.target.value}))}
+                    className="border border-gray-300 rounded-lg px-3 py-2 w-full text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400">
+                    {['viewer','super','admin'].map(r => <option key={r} value={r}>{t.roleNames[r]}</option>)}
+                  </select>
+                </div>
+                <div className="flex gap-2">
+                  <button onClick={() => setUForm(null)} className="flex-1 py-2 border border-gray-300 rounded-lg text-gray-600 hover:bg-gray-50 text-sm">{t.cancel}</button>
+                  <button onClick={saveNewUser} disabled={!uForm.username || !uForm.password}
+                    className="flex-1 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-semibold text-sm disabled:opacity-40">{t.create}</button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ── Password Reset Modal ── */}
+          {pwReset && (
+            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+              <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-sm">
+                <h2 className="text-xl font-bold text-gray-800 mb-1">{t.resetPassword}</h2>
+                <p className="text-sm text-gray-500 mb-4">{t.resetPasswordBody(pwReset.username)}</p>
+                <TextField type="password" value={pwReset.password}
+                  onChange={v => setPwReset(f=>({...f,password:v}))} placeholder={t.newPasswordPh} autoFocus />
+                <div className="flex gap-2 mt-4">
+                  <button onClick={() => setPwReset(null)} className="flex-1 py-2 border border-gray-300 rounded-lg text-gray-600 hover:bg-gray-50 text-sm">{t.cancel}</button>
+                  <button onClick={savePwReset} disabled={!pwReset.password}
+                    className="flex-1 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-semibold text-sm disabled:opacity-40">{t.save}</button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ── Busy overlay ── */}
+          {busy && (
+            <div className="fixed inset-0 bg-black bg-opacity-20 flex items-center justify-center z-50">
+              <div className="bg-white rounded-2xl px-8 py-6 shadow-2xl flex items-center gap-3">
+                <div className="w-5 h-5 border-2 border-indigo-200 border-t-indigo-600 rounded-full animate-spin" />
+                <span className="text-gray-700 font-medium">{t.saving}</span>
+              </div>
+            </div>
+          )}
+
+          {/* ── CSV Import Modal ── */}
+          {csvImport && (
+            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+              <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-2xl max-h-[90vh] flex flex-col">
+                <h2 className="text-xl font-bold text-gray-800 mb-1">{t.importTitle}</h2>
+                <p className="text-sm text-gray-500 mb-4">
+                  {t.locale === 'zh-TW'
+                    ? <>必填：<code className="bg-gray-100 px-1 rounded text-xs">firstName</code>、<code className="bg-gray-100 px-1 rounded text-xs">lastName</code>。選填：<code className="bg-gray-100 px-1 rounded text-xs">phone</code>、<code className="bg-gray-100 px-1 rounded text-xs">group</code>（須與現有小組名稱完全相符）。亦接受 <code className="bg-gray-100 px-1 rounded text-xs">first_name</code> / <code className="bg-gray-100 px-1 rounded text-xs">last_name</code> / <code className="bg-gray-100 px-1 rounded text-xs">group_name</code>。</>
+                    : <>Required: <code className="bg-gray-100 px-1 rounded text-xs">firstName</code>, <code className="bg-gray-100 px-1 rounded text-xs">lastName</code>. Optional: <code className="bg-gray-100 px-1 rounded text-xs">phone</code>, <code className="bg-gray-100 px-1 rounded text-xs">group</code> (must match an existing group name exactly). Also accepts <code className="bg-gray-100 px-1 rounded text-xs">first_name</code> / <code className="bg-gray-100 px-1 rounded text-xs">last_name</code> / <code className="bg-gray-100 px-1 rounded text-xs">group_name</code>.</>
+                  }
+                </p>
+
+                {(() => {
+                  const rows = csvImport.rows;
+                  const hasGroup = rows.some(r => r.group);
+                  const valid   = rows.filter(r => r.firstName && r.lastName);
+                  const invalid = rows.filter(r => !r.firstName || !r.lastName);
+                  const groupNotFound = valid.filter(r => r.group && !data.groups.find(g => groupNameMatches(g, r.group)));
+                  return (
+                    <>
+                      <div className="flex flex-wrap gap-2 mb-3 text-sm">
+                        <span className="bg-green-100 text-green-700 font-semibold px-2 py-0.5 rounded-full">{valid.length} {t.validLabel}</span>
+                        {invalid.length > 0 && <span className="bg-red-100 text-red-600 font-semibold px-2 py-0.5 rounded-full">{invalid.length} {t.missingNameLabel}</span>}
+                        {groupNotFound.length > 0 && <span className="bg-yellow-100 text-yellow-700 font-semibold px-2 py-0.5 rounded-full">{t.groupNamesNotFound(groupNotFound.length)}</span>}
+                      </div>
+                      <div className="overflow-auto flex-1 border border-gray-200 rounded-xl mb-4">
+                        <table className="w-full text-sm">
+                          <thead className="bg-gray-50 sticky top-0">
+                            <tr>
+                              <th className="text-left px-3 py-2 text-xs font-semibold text-gray-500 uppercase">{t.colFirst}</th>
+                              <th className="text-left px-3 py-2 text-xs font-semibold text-gray-500 uppercase">{t.colLast}</th>
+                              <th className="text-left px-3 py-2 text-xs font-semibold text-gray-500 uppercase">{t.colPhone}</th>
+                              {hasGroup && <th className="text-left px-3 py-2 text-xs font-semibold text-gray-500 uppercase">{t.colGroup}</th>}
+                              <th className="text-left px-3 py-2 text-xs font-semibold text-gray-500 uppercase">{t.colStatus}</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-gray-100">
+                            {rows.map((r, i) => {
+                              const ok = r.firstName && r.lastName;
+                              const grp = r.group ? data.groups.find(g => groupNameMatches(g, r.group)) : null;
+                              const grpMissing = r.group && !grp;
+                              return (
+                                <tr key={i} className={ok ? '' : 'bg-red-50'}>
+                                  <td className="px-3 py-2 text-gray-800">{r.firstName || <span className="text-red-400 italic">{t.missingText}</span>}</td>
+                                  <td className="px-3 py-2 text-gray-800">{r.lastName  || <span className="text-red-400 italic">{t.missingText}</span>}</td>
+                                  <td className="px-3 py-2 text-gray-500">{r.phone || '—'}</td>
+                                  {hasGroup && (
+                                    <td className="px-3 py-2">
+                                      {r.group
+                                        ? grp
+                                          ? <span className="text-xs bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full font-medium">{r.group}</span>
+                                          : <span className="text-xs bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded-full font-medium" title="Group not found">{r.group} ⚠</span>
+                                        : <span className="text-gray-400">—</span>}
+                                    </td>
+                                  )}
+                                  <td className="px-3 py-2">{ok
+                                    ? <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-medium">{t.statusOk}</span>
+                                    : <span className="text-xs bg-red-100 text-red-600 px-2 py-0.5 rounded-full font-medium">{t.statusSkip}</span>}
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                      <div className="flex gap-2 shrink-0">
+                        <button onClick={() => setCsvImport(null)} className="flex-1 py-2 border border-gray-300 rounded-lg text-gray-600 hover:bg-gray-50 text-sm">{t.cancel}</button>
+                        <button onClick={doImport} disabled={valid.length===0}
+                          className="flex-1 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-semibold text-sm disabled:opacity-40">
+                          {t.importCount(valid.length)}
+                        </button>
+                      </div>
+                    </>
+                  );
+                })()}
+              </div>
+            </div>
+          )}
+
+          {/* ── Add Member Modal ── */}
+          {addMemberModal && (() => {
+            const g = data.groups.find(x => x.id === addMemberModal.groupId);
+            if (!g) return null;
+            // Anyone not already committed to a group within one of *this*
+            // group's meetings is eligible, even if they're in a group for
+            // a meeting this group isn't assigned to.
+            const available = activePeople(data).filter(p => !groupClash(data, p.id, g.meetingIds, g.id));
+            return (
+              <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+                <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-sm max-h-[90vh] flex flex-col">
+                  <h2 className="text-xl font-bold text-gray-800 mb-1">{t.addMember}</h2>
+                  <p className="text-sm text-gray-500 mb-4">{t.addMemberTo} <span className="font-semibold text-gray-700">{localizedName(g, lang)}</span></p>
+                  {available.length === 0
+                    ? <p className="text-sm text-gray-400 italic mb-4">{t.noUnassigned}</p>
+                    : <div className="overflow-y-auto flex-1 border border-gray-200 rounded-xl mb-4 divide-y divide-gray-100">
+                        {available.map(p => (
+                          <div key={p.id} onClick={() => addMemberToGroup(g.id, p.id)}
+                            className="flex items-center justify-between px-4 py-3 cursor-pointer hover:bg-indigo-50 transition">
+                            <div>
+                              <p className="text-sm font-medium text-gray-800">{p.firstName} {p.lastName}</p>
+                              {p.phone && <p className="text-xs text-gray-400">{p.phone}</p>}
+                            </div>
+                            <I.Plus className="w-4 h-4 text-indigo-400" />
+                          </div>
+                        ))}
+                      </div>
+                  }
+                  <div className="flex gap-2 shrink-0">
+                    <button onClick={() => setAddMemberModal(null)}
+                      className="flex-1 py-2 border border-gray-300 rounded-lg text-gray-600 hover:bg-gray-50 text-sm">{t.cancel}</button>
+                    <button onClick={() => { addForGroupRef.current = g.id; setAddMemberModal(null); openAddPerson(); }}
+                      className="flex-1 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 text-sm font-semibold flex items-center justify-center gap-1">
+                      <I.Plus /> {t.newPerson}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* ── Group Modal ── */}
+          {gForm && (
+            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+              <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-md max-h-screen overflow-y-auto">
+                <h2 className="text-xl font-bold text-gray-800 mb-4">{gEditing ? t.editGroupTitle : t.newGroupTitle}</h2>
+                <div className="space-y-4 mb-5">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">{t.groupNameLabel}</label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <input value={gForm.name.en} onChange={e => setGForm(f=>({...f,name:{...f.name,en:e.target.value}}))} placeholder={t.nameEnLabel}
+                        className="border border-gray-300 rounded-lg px-3 py-2 w-full text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+                      <input value={gForm.name.zh} onChange={e => setGForm(f=>({...f,name:{...f.name,zh:e.target.value}}))} placeholder={t.nameZhLabel}
+                        className="border border-gray-300 rounded-lg px-3 py-2 w-full text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+                    </div>
+                    <p className="text-xs text-gray-400 mt-1">{t.nameHint}</p>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      {t.meetingLabel} <span className="text-gray-400 font-normal">{t.selectedCount(gForm.meetingIds.length)}</span>
+                    </label>
+                    <div className="border border-gray-200 rounded-xl overflow-hidden max-h-40 overflow-y-auto">
+                      {data.meetings.map(m => {
+                        const sel = gForm.meetingIds.includes(m.id);
+                        return (
+                          <div key={m.id} onClick={() => toggleGMeeting(m.id)}
+                            className={`flex items-center gap-3 px-3 py-2.5 cursor-pointer transition ${sel ? 'bg-indigo-50' : 'hover:bg-gray-50'}`}>
+                            <div className={`w-4 h-4 rounded border-2 flex items-center justify-center shrink-0 text-white transition-colors ${sel ? 'bg-indigo-600 border-indigo-600' : 'border-gray-300'}`}>
+                              {sel && <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>}
+                            </div>
+                            <span className="text-sm text-gray-800">{localizedName(m, lang)}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      {t.membersLabel} <span className="text-gray-400 font-normal">{t.selectedCount(gForm.memberIds.length)}</span>
+                    </label>
+                    {activePeople(data).length === 0
+                      ? <p className="text-gray-400 text-sm italic">{t.addPeopleFirst}</p>
+                      : <div className="border border-gray-200 rounded-xl overflow-hidden max-h-52 overflow-y-auto">
+                          {activePeople(data).map(p => {
+                            const sel = gForm.memberIds.includes(p.id);
+                            // Scoped to the meetings currently checked in this form, so
+                            // changing them re-evaluates who is available.
+                            const otherGroup = groupClash(data, p.id, gForm.meetingIds, gEditing);
+                            const disabled = !sel && !!otherGroup;
+                            return (
+                              <div key={p.id} onClick={() => !disabled && toggleGMember(p.id)}
+                                className={`flex items-center gap-3 px-3 py-2.5 transition ${disabled ? 'opacity-40 cursor-not-allowed bg-gray-50' : `cursor-pointer ${sel ? 'bg-indigo-50' : 'hover:bg-gray-50'}`}`}>
+                                <div className={`w-4 h-4 rounded border-2 flex items-center justify-center shrink-0 text-white transition-colors ${sel ? 'bg-indigo-600 border-indigo-600' : 'border-gray-300'}`}>
+                                  {sel && <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>}
+                                </div>
+                                <span className="text-sm text-gray-800">{p.firstName} {p.lastName}</span>
+                                <span className="text-xs text-gray-400 ml-auto">
+                                  {disabled ? localizedName(otherGroup, lang) : p.phone}
+                                </span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                    }
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <button onClick={() => setGForm(null)} className="flex-1 py-2 border border-gray-300 rounded-lg text-gray-600 hover:bg-gray-50 text-sm">{t.cancel}</button>
+                  <button onClick={saveGroup} className="flex-1 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-semibold text-sm">{t.saveGroup}</button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ── Person Modal ── */}
+          {pForm && (
+            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+              <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-sm">
+                <h2 className="text-xl font-bold text-gray-800 mb-4">{pEditing ? (t.locale==='zh-TW'?'編輯人員':'Edit Person') : t.newPerson}</h2>
+                <div className="space-y-3 mb-5">
+                  {personFields.map(([label, key, ph]) => (
+                    <div key={key}>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
+                      <input value={pForm[key]} onChange={e => setPForm(p=>({...p,[key]:e.target.value}))} placeholder={ph}
+                        className="border border-gray-300 rounded-lg px-3 py-2 w-full text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+                    </div>
+                  ))}
+                </div>
+                <div className="flex gap-2">
+                  <button onClick={() => setPForm(null)} className="flex-1 py-2 border border-gray-300 rounded-lg text-gray-600 hover:bg-gray-50 text-sm">{t.cancel}</button>
+                  <button onClick={savePerson} className="flex-1 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-semibold text-sm">{t.savePerson}</button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ── Meeting Modal ── */}
+          {mForm && (
+            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+              <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-sm">
+                <h2 className="text-xl font-bold text-gray-800 mb-4">{mEditing ? t.editMeetingTitle : t.newMeetingTitle}</h2>
+                <div className="space-y-3 mb-5">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">{t.meetingNameLabel}</label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <input value={mForm.name.en} onChange={e => setMForm(f=>({...f,name:{...f.name,en:e.target.value}}))} placeholder={t.nameEnLabel}
+                        className="border border-gray-300 rounded-lg px-3 py-2 w-full text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+                      <input value={mForm.name.zh} onChange={e => setMForm(f=>({...f,name:{...f.name,zh:e.target.value}}))} placeholder={t.nameZhLabel}
+                        className="border border-gray-300 rounded-lg px-3 py-2 w-full text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+                    </div>
+                    <p className="text-xs text-gray-400 mt-1">{t.nameHint}</p>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">{t.dayOfWeekLabel}</label>
+                    <select value={mForm.dayOfWeek} onChange={e => setMForm(f=>({...f,dayOfWeek:parseInt(e.target.value)}))}
+                      className="border border-gray-300 rounded-lg px-3 py-2 w-full text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400">
+                      {t.days.map((d,i) => <option key={i} value={i}>{d}</option>)}
+                    </select>
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <button onClick={() => setMForm(null)} className="flex-1 py-2 border border-gray-300 rounded-lg text-gray-600 hover:bg-gray-50 text-sm">{t.cancel}</button>
+                  <button onClick={saveMeeting} className="flex-1 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-semibold text-sm">{t.saveMeeting}</button>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    };
+
+    // ─── Bible SVG ────────────────────────────────────────────────────────────
+    const BibleSVG = ({ size = 80, opacity = 0.07, rotate = 0 }) => (
+      <svg width={size} height={size * 1.25} viewBox="0 0 80 100" fill="none"
+        style={{ opacity, transform: `rotate(${rotate}deg)`, display:'block' }}>
+        <rect x="0" y="2" width="10" height="96" rx="2" fill="#5C3317" />
+        <rect x="8" y="0" width="66" height="100" rx="3" fill="#7B3F00" />
+        <rect x="70" y="3" width="6" height="94" rx="1" fill="#D4A843" />
+        <line x1="70" y1="15" x2="76" y2="15" stroke="#B8860B" strokeWidth="0.5" />
+        <line x1="70" y1="25" x2="76" y2="25" stroke="#B8860B" strokeWidth="0.5" />
+        <line x1="70" y1="35" x2="76" y2="35" stroke="#B8860B" strokeWidth="0.5" />
+        <line x1="70" y1="45" x2="76" y2="45" stroke="#B8860B" strokeWidth="0.5" />
+        <line x1="70" y1="55" x2="76" y2="55" stroke="#B8860B" strokeWidth="0.5" />
+        <line x1="70" y1="65" x2="76" y2="65" stroke="#B8860B" strokeWidth="0.5" />
+        <line x1="70" y1="75" x2="76" y2="75" stroke="#B8860B" strokeWidth="0.5" />
+        <line x1="70" y1="85" x2="76" y2="85" stroke="#B8860B" strokeWidth="0.5" />
+        <rect x="35" y="22" width="6" height="36" rx="1" fill="#D4A843" />
+        <rect x="22" y="34" width="32" height="6" rx="1" fill="#D4A843" />
+        <rect x="15" y="66" width="50" height="4" rx="1" fill="#D4A843" opacity="0.6" />
+        <rect x="20" y="74" width="40" height="3" rx="1" fill="#D4A843" opacity="0.4" />
+        <rect x="25" y="81" width="30" height="3" rx="1" fill="#D4A843" opacity="0.4" />
+      </svg>
+    );
+
+    const BIBLE_POSITIONS = [
+      { top:'4%',  left:'2%',   size:90,  rotate:-15, opacity:0.18 },
+      { top:'4%',  right:'3%',  size:70,  rotate:20,  opacity:0.15 },
+      { top:'25%', left:'-1%',  size:100, rotate:10,  opacity:0.14 },
+      { top:'22%', right:'1%',  size:80,  rotate:-20, opacity:0.17 },
+      { top:'45%', left:'3%',   size:75,  rotate:25,  opacity:0.15 },
+      { top:'48%', right:'2%',  size:95,  rotate:-10, opacity:0.14 },
+      { top:'65%', left:'1%',   size:85,  rotate:-25, opacity:0.17 },
+      { top:'68%', right:'3%',  size:70,  rotate:15,  opacity:0.15 },
+      { top:'82%', left:'4%',   size:90,  rotate:18,  opacity:0.14 },
+      { top:'85%', right:'1%',  size:80,  rotate:-12, opacity:0.17 },
+      { top:'14%', left:'45%',  size:65,  rotate:30,  opacity:0.12 },
+      { top:'55%', left:'47%',  size:72,  rotate:-22, opacity:0.12 },
+    ];
+
+    const BibleBackground = () => (
+      <div className="fixed inset-0 pointer-events-none overflow-hidden" style={{zIndex:0}}>
+        {BIBLE_POSITIONS.map(({ top, left, right, bottom, size, rotate, opacity }, i) => (
+          <div key={i} style={{ position:'absolute', top, left, right, bottom }}>
+            <BibleSVG size={size} opacity={opacity} rotate={rotate} />
+          </div>
+        ))}
+      </div>
+    );
+
+    // ─── Root ─────────────────────────────────────────────────────────────────
+    // A freshly registered account is signed in but has no role yet. It sees this
+    // and nothing else — no roster, no phone numbers — until an admin grants one.
+    const PendingScreen = () => {
+      const { t, username, signOut, lang, setLang } = useApp();
+      return (
+        <div className="min-h-screen flex items-center justify-center p-4" style={{ position:'relative' }}>
+          <BibleBackground />
+          <div className="w-full max-w-sm" style={{ position:'relative', zIndex:1 }}>
+            <div className="bg-white rounded-2xl shadow-xl border border-gray-100 p-7 text-center">
+              <div className="w-12 h-12 rounded-full bg-amber-100 text-amber-600 flex items-center justify-center mx-auto mb-4">
+                <I.Clock />
+              </div>
+              <h1 className="text-xl font-bold text-gray-800 mb-1">{t.pendingTitle}</h1>
+              <p className="text-sm text-gray-500 mb-5">{t.pendingBody(username || '')}</p>
+              <div className="flex gap-2">
+                <button onClick={() => setLang(lang === 'en' ? 'zh' : 'en')}
+                  className="px-3 py-2 border border-gray-300 rounded-lg text-gray-600 hover:bg-gray-50 text-sm font-semibold">
+                  {t.langToggle}
+                </button>
+                <button onClick={signOut}
+                  className="flex-1 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-semibold text-sm">
+                  {t.signOut}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    };
+
+    const App = () => {
+      const { view, apiError, authState, role } = useApp();
+
+      // No application data is fetched or rendered until the server confirms a session.
+      if (authState === 'checking') return <Spinner />;
+      if (authState === 'anon')     return <SignInScreen />;
+      if (role === 'pending')       return <PendingScreen />;
+
+      return (
+        <div className="min-h-screen" style={{position:'relative'}}>
+          <BibleBackground />
+          <Navbar />
+          <div style={{position:'relative', zIndex:1}}>
+            {apiError && (
+              <div className="max-w-3xl mx-auto px-4 pt-4">
+                <div className="bg-red-50 border border-red-200 text-red-700 rounded-xl px-4 py-3 text-sm font-medium">
+                  {apiError}
+                </div>
+              </div>
+            )}
+            {view.name === 'home'       && <HomeView />}
+            {view.name === 'meeting'    && <MeetingView />}
+            {view.name === 'attendance' && <AttendanceView />}
+            {view.name === 'history'    && <HistoryView />}
+            {view.name === 'admin'      && <AdminView />}
+          </div>
+        </div>
+      );
+    };
+
+    ReactDOM.createRoot(document.getElementById('root')).render(
+      <Provider><App /></Provider>
+    );
+  </script>
+</body>
+</html>
