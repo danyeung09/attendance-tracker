@@ -914,6 +914,63 @@ app.post('/api/attendance', requireSuper, route(async (req, res) => {
   res.json(result);
 }));
 
+// Edits an existing session in place — used to correct who attended, or to
+// move it onto the date it should have been recorded under. Unlike the upsert
+// above (keyed on meetingId+groupId+date), this targets one record by id, so
+// changing its date moves that record rather than leaving a stale one behind
+// on the old date and creating a second one on the new date.
+app.patch('/api/attendance/:id', requireSuper, route(async (req, res) => {
+  const { date, records = [], rev } = req.body || {};
+  if (!date) throw new HttpError(400, 'date required');
+  if (!Number.isInteger(rev)) throw new HttpError(400, 'rev must be an integer');
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || Number.isNaN(Date.parse(`${date}T00:00:00Z`))) {
+    throw new HttpError(400, 'date must be a valid YYYY-MM-DD date');
+  }
+  if (!Array.isArray(records)) throw new HttpError(400, 'records must be an array');
+
+  const result = await commit(s => {
+    const idx = s.attendance.findIndex(a => a.id === req.params.id);
+    if (idx < 0) throw new HttpError(404, 'Attendance record not found');
+    const existing = s.attendance[idx];
+
+    const currentRev = existing.rev || 0;
+    if (rev !== currentRev) {
+      throw new HttpError(409, 'Someone else saved this session while you were editing it.', {
+        conflict: { rev: currentRev, records: existing.records },
+      });
+    }
+
+    const group = s.groups.find(g => g.id === existing.groupId);
+    if (!group) throw new HttpError(400, 'Unknown group');
+
+    const members = new Set(group.memberIds || []);
+    const seen    = new Set();
+    const clean   = [];
+    for (const r of records) {
+      const pid = r && r.personId;
+      if (!members.has(pid)) throw new HttpError(400, 'records contain someone who is not in this group');
+      if (seen.has(pid)) throw new HttpError(400, 'records contain a duplicate person');
+      seen.add(pid);
+      clean.push({ personId: pid, present: !!(r && r.present) });
+    }
+
+    // Moving onto a date that already has a recorded session for this same
+    // meeting+group would silently merge two sessions into one.
+    if (date !== existing.date) {
+      const clash = s.attendance.some(a =>
+        a.id !== existing.id && a.meetingId === existing.meetingId &&
+        a.groupId === existing.groupId && a.date === date
+      );
+      if (clash) throw new HttpError(400, 'A session already exists on that date for this group.');
+    }
+
+    const entry = { ...existing, date, records: clean, rev: currentRev + 1 };
+    s.attendance[idx] = entry;
+    return { id: entry.id, rev: entry.rev };
+  });
+  res.json(result);
+}));
+
 // ─── Unknown API paths ────────────────────────────────────────────────────────
 // Answer with JSON rather than falling through to the SPA fallback, which would
 // return an HTML page that the client's r.json() cannot parse.
