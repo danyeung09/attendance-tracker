@@ -163,6 +163,7 @@
         editRecordTip: 'Edit this session',
         deleteRecordTip: 'Delete this session',
         confirmDeleteRecord: 'Delete this session? This cannot be undone.',
+        recordDetails: 'Details',
         conflictTitle: 'Someone else saved this session first',
         conflictBody: (theirs, mine) =>
           `Their version marks ${theirs} present; yours marks ${mine}. Choose which to keep — nothing has been overwritten yet.`,
@@ -339,6 +340,7 @@
         editRecordTip: '編輯此記錄',
         deleteRecordTip: '刪除此記錄',
         confirmDeleteRecord: '確定刪除此記錄？此操作無法復原。',
+        recordDetails: '詳細資料',
         conflictTitle: '其他人已先儲存此次聚會記錄',
         conflictBody: (theirs, mine) =>
           `對方的版本記錄 ${theirs} 人出席，您的版本為 ${mine} 人。請選擇要保留哪一個 — 目前尚未覆寫任何資料。`,
@@ -1363,7 +1365,14 @@
       const { data, loading, t, lang, canManage, refresh } = useApp();
       const [filter, setFilter] = useState('all');
       const [editing, setEditing] = useState(null);   // { record, members }
+      const [expanded, setExpanded] = useState(() => new Set());
       if (loading) return <Spinner />;
+
+      const toggleExpanded = (id) => setExpanded(s => {
+        const next = new Set(s);
+        if (next.has(id)) next.delete(id); else next.add(id);
+        return next;
+      });
 
       const openEdit = (rec) => {
         const group = data.groups.find(g => g.id === rec.groupId);
@@ -1450,18 +1459,25 @@
                             <div className="h-1.5 bg-gray-100 rounded-full mb-3">
                               <div className="h-1.5 bg-indigo-500 rounded-full" style={{ width:`${pct}%` }} />
                             </div>
-                            <div className="flex flex-wrap gap-1">
-                              {rec.records.map(r => {
-                                const p = data.people.find(x => x.id === r.personId);
-                                if (!p) return null;
-                                return (
-                                  <span key={r.personId} className={`text-xs px-2 py-0.5 rounded-full font-medium ${r.present ? 'bg-green-100 text-green-700' : 'bg-red-50 text-red-500'} ${p.archived ? 'italic opacity-70' : ''}`}
-                                    title={p.archived ? t.archivedTip : undefined}>
-                                    {p.firstName} {p.lastName}
-                                  </span>
-                                );
-                              })}
-                            </div>
+                            <button type="button" onClick={() => toggleExpanded(rec.id)}
+                              className="flex items-center gap-1.5 text-xs font-semibold text-gray-500 uppercase tracking-wider hover:text-gray-700">
+                              <span className={`transition-transform ${expanded.has(rec.id) ? 'rotate-180' : ''}`}><I.Chevron /></span>
+                              {t.recordDetails}
+                            </button>
+                            {expanded.has(rec.id) && (
+                              <div className="flex flex-wrap gap-1 mt-2">
+                                {rec.records.map(r => {
+                                  const p = data.people.find(x => x.id === r.personId);
+                                  if (!p) return null;
+                                  return (
+                                    <span key={r.personId} className={`text-xs px-2 py-0.5 rounded-full font-medium ${r.present ? 'bg-green-100 text-green-700' : 'bg-red-50 text-red-500'} ${p.archived ? 'italic opacity-70' : ''}`}
+                                      title={p.archived ? t.archivedTip : undefined}>
+                                      {p.firstName} {p.lastName}
+                                    </span>
+                                  );
+                                })}
+                              </div>
+                            )}
                           </div>
                         );
                       })}
