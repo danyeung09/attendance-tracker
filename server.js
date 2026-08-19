@@ -971,6 +971,17 @@ app.patch('/api/attendance/:id', requireSuper, route(async (req, res) => {
   res.json(result);
 }));
 
+// Removes a session outright — used to clear a stray or duplicate record left
+// behind by a mistaken save, e.g. an old-dated row orphaned before edits moved
+// to the by-id PATCH above.
+app.delete('/api/attendance/:id', requireSuper, route(async (req, res) => {
+  await commit(s => {
+    if (!s.attendance.some(a => a.id === req.params.id)) throw new HttpError(404, 'Attendance record not found');
+    s.attendance = s.attendance.filter(a => a.id !== req.params.id);
+  });
+  res.json({ ok: true });
+}));
+
 // ─── Unknown API paths ────────────────────────────────────────────────────────
 // Answer with JSON rather than falling through to the SPA fallback, which would
 // return an HTML page that the client's r.json() cannot parse.
