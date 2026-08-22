@@ -59,6 +59,9 @@
         attendanceTrend: 'Attendance Trend',
         byGroup: 'By Group',
         selectGroups: 'Select groups…',
+        noTrendGroups: 'No groups are set up for this chart yet.',
+        noTrendGroupsAdminHint: 'Choose groups in Admin > Trend.',
+        trendGroupsHint: 'Pick the groups that make up the Overall Attendance Trend on the History page. Anyone can still chart individual groups there separately.',
         adminPasswordPh: 'Admin password',
         login: 'Sign In',
         cancel: 'Cancel',
@@ -119,7 +122,7 @@
         adminActive: 'Admin mode active',
         superActive: 'Super user mode active',
         exitAdmin: 'Exit',
-        tabLabels: ['groups', 'people', 'meetings', 'users'],
+        tabLabels: ['groups', 'people', 'meetings', 'trend', 'users'],
         newGroup: 'New Group',
         editGroupTitle: 'Edit Group',
         newGroupTitle: 'New Group',
@@ -237,6 +240,9 @@
         attendanceTrend: '出席趨勢',
         byGroup: '按小組',
         selectGroups: '選擇小組…',
+        noTrendGroups: '尚未設定此圖表的小組。',
+        noTrendGroupsAdminHint: '請在「管理 > 趨勢」中選擇小組。',
+        trendGroupsHint: '選擇要組成「出席歷史」頁面上「整體出席趨勢」的小組。任何人仍可在該頁另外查看個別小組的圖表。',
         adminPasswordPh: '管理員密碼',
         login: '登入',
         cancel: '取消',
@@ -297,7 +303,7 @@
         adminActive: '管理模式已啟用',
         superActive: '超級使用者模式已啟用',
         exitAdmin: '退出',
-        tabLabels: ['小組', '人員', '聚會', '帳號'],
+        tabLabels: ['小組', '人員', '聚會', '趨勢', '帳號'],
         newGroup: '新增小組',
         editGroupTitle: '編輯小組',
         newGroupTitle: '新增小組',
@@ -469,7 +475,7 @@
     const Ctx = createContext();
     const useApp = () => useContext(Ctx);
 
-    const EMPTY = { meetings:[], groups:[], people:[], attendance:[] };
+    const EMPTY = { meetings:[], groups:[], people:[], attendance:[], settings:{ trendGroupIds:[] } };
 
     // A meeting/group name is bilingual — { en, zh } — so it reads correctly
     // under either language toggle. Falls back across languages so a name
@@ -1144,16 +1150,15 @@
     const CHART_COLORS = ['#6366f1','#10b981','#f59e0b','#ef4444','#8b5cf6','#06b6d4'];
     const shortDate = (s) => new Date(s + 'T00:00:00').toLocaleDateString('en-US', { month:'short', day:'numeric' });
 
-    const AttendanceChart = ({ data, groups, meetingId, presentTip, title, lang }) => {
+    const AttendanceChart = ({ data, groups, presentTip, title, lang }) => {
       const canvasRef = useRef(null);
       const chartRef  = useRef(null);
 
-      // One combined line: the total present across every selected group,
-      // per date. Per-group breakdowns live in the GroupBarChart cards below —
-      // this chart is the "all selected groups together" total, not a line
-      // per group.
+      // One combined line: the total present across every group passed in,
+      // per date. This is the shared "Overall Attendance Trend" — per-group
+      // breakdowns live in the separate By Group section, not here.
       const { labels, datasets } = useMemo(() => {
-        const relevant = data.attendance.filter(a => a.meetingId === meetingId && groups.some(g => g.id === a.groupId));
+        const relevant = data.attendance.filter(a => groups.some(g => g.id === a.groupId));
         const dates = [...new Set(relevant.map(a => a.date))].sort();
         if (!dates.length) return { labels: [], datasets: [] };
 
@@ -1176,7 +1181,7 @@
             spanGaps: false,
           }],
         };
-      }, [data.attendance, groups, meetingId, lang]);
+      }, [data.attendance, groups, lang]);
 
       useEffect(() => {
         if (!canvasRef.current || !labels.length) return;
@@ -1463,6 +1468,13 @@
       const chartGroups = (activeFilter === 'all' ? data.groups : data.groups.filter(g => g.meetingIds.includes(activeFilter)))
         .filter(g => data.attendance.some(a => a.groupId === g.id));
 
+      // The Overall Attendance Trend is a separate, admin/super-configured
+      // chart (Admin > Trend) — a fixed set of groups combined into one
+      // total, independent of the meeting/group pickers below. It doesn't
+      // follow the top meeting filter, since it's meant to stay stable.
+      const trendGroupIds = data.settings?.trendGroupIds || [];
+      const trendGroups = data.groups.filter(g => trendGroupIds.includes(g.id));
+
       // Group trends are shown for one meeting at a time, picked from a
       // dropdown, so an "All meetings" view doesn't dump every meeting's
       // group charts on screen at once.
@@ -1580,6 +1592,20 @@
 
               {/* ── Right: charts ── */}
               <div className="w-1/2 min-w-0 space-y-4">
+                {/* Overall Attendance Trend: a fixed set of groups picked by an
+                    admin/super user in Admin > Trend, combined into one total.
+                    Separate from — and independent of — the free-form By Group
+                    picker below. */}
+                {trendGroups.length > 0 ? (
+                  <AttendanceChart data={data} groups={trendGroups} presentTip={t.chartPresentTip} title={t.attendanceTrend} lang={lang} />
+                ) : (
+                  <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 mb-4">
+                    <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-2">{t.attendanceTrend}</h2>
+                    <p className="text-sm text-gray-400">{t.noTrendGroups}</p>
+                    {canManage && <p className="text-xs text-gray-400 mt-1">{t.noTrendGroupsAdminHint}</p>}
+                  </div>
+                )}
+
                 {activeSection && (
                   <>
                     <div className="flex items-center justify-between gap-2 px-1">
@@ -1597,8 +1623,6 @@
                           onToggle={toggleGroupSelected} lang={lang} placeholder={t.selectGroups} />
                       </div>
                     </div>
-                    <AttendanceChart data={data} groups={activeSection.groups.filter(g => activeGroupIds.has(g.id))}
-                      meetingId={activeChartMeetingId} presentTip={t.chartPresentTip} title={t.attendanceTrend} lang={lang} />
                     {activeSection.groups.filter(g => activeGroupIds.has(g.id)).map(g => (
                       <GroupBarChart key={g.id} group={g} meetingId={activeChartMeetingId} data={data}
                         presentLabel={t.chartPresentLabel} absentLabel={t.chartAbsentLabel} lang={lang} />
@@ -1746,7 +1770,7 @@
     };
 
     // ─── Admin View ───────────────────────────────────────────────────────────
-    const TAB_IDS = ['groups', 'people', 'meetings', 'users'];
+    const TAB_IDS = ['groups', 'people', 'meetings', 'trend', 'users'];
 
     const AdminView = () => {
       const { data, refresh, isAdmin, canManage, goBack, goHome, loading, t, lang } = useApp();
@@ -1932,6 +1956,13 @@
         run(() => api.del(`/api/meetings/${id}`));
       };
 
+      // ── Overall Attendance Trend group picks ──
+      const toggleTrendGroup = (id) => {
+        const current = data.settings?.trendGroupIds || [];
+        const next = current.includes(id) ? current.filter(x => x !== id) : [...current, id];
+        run(() => api.put('/api/settings', { trendGroupIds: next }));
+      };
+
       // Role is server-assigned; this only decides which UI to show. Every
       // management endpoint re-checks it independently.
       if (!canManage) return <NoAccessNotice onCancel={goBack} />;
@@ -2107,6 +2138,34 @@
                   );
                 })}
               </div>
+            </div>
+          )}
+
+          {/* ── Trend ── */}
+          {activeTab === 'trend' && (
+            <div>
+              <p className="text-xs text-gray-500 mb-3">{t.trendGroupsHint}</p>
+              {data.meetings.map(meeting => {
+                const groups = data.groups.filter(g => g.meetingIds.includes(meeting.id));
+                if (!groups.length) return null;
+                return (
+                  <div key={meeting.id} className="mb-5">
+                    <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">{localizedName(meeting, lang)}</h3>
+                    <div className="space-y-2">
+                      {groups.map(g => {
+                        const checked = (data.settings?.trendGroupIds || []).includes(g.id);
+                        return (
+                          <label key={g.id} className="flex items-center gap-3 bg-white rounded-xl border border-gray-100 shadow-sm p-3 cursor-pointer hover:bg-gray-50">
+                            <input type="checkbox" checked={checked} disabled={busy} onChange={() => toggleTrendGroup(g.id)}
+                              className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-400" />
+                            <span className="text-sm font-medium text-gray-800">{localizedName(g, lang)}</span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           )}
 

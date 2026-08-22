@@ -51,6 +51,9 @@ const SEED = {
     { id:'p6', firstName:'Sarah',   lastName:'Martinez', phone:'555-0106' },
   ],
   attendance: [],
+  // Which groups feed the shared "Overall Attendance Trend" chart in History.
+  // Set by an admin/super user in Admin > Trend; everyone else just views it.
+  settings: { trendGroupIds: [] },
 };
 
 // ─── Persistence helpers ──────────────────────────────────────────────────────
@@ -487,6 +490,7 @@ app.get('/api/data', requireViewer, (req, res) => res.json({
   groups:     store.groups,
   people:     store.people,
   attendance: store.attendance,
+  settings:   store.settings,
 }));
 
 // ─── Users (admin only) ───────────────────────────────────────────────────────
@@ -632,6 +636,23 @@ app.patch('/api/me/focus-groups', requireViewer, route(async (req, res) => {
     return user.focusGroupIds;
   });
   res.json({ focusGroupIds: saved });
+}));
+
+// Shared app setting (not per-user, unlike focus-groups above): which groups
+// feed the "Overall Attendance Trend" chart in History for every viewer.
+// Admin or super only — everyone else just sees the resulting chart.
+app.put('/api/settings', requireSuper, route(async (req, res) => {
+  const { trendGroupIds } = req.body || {};
+  if (!Array.isArray(trendGroupIds) || trendGroupIds.some(id => typeof id !== 'string')) {
+    throw new HttpError(400, 'trendGroupIds must be an array of strings');
+  }
+  const saved = await commit(s => {
+    const known = new Set(s.groups.map(g => g.id));
+    s.settings = s.settings || {};
+    s.settings.trendGroupIds = [...new Set(trendGroupIds)].filter(id => known.has(id));
+    return s.settings;
+  });
+  res.json(saved);
 }));
 
 // A meeting or group name is bilingual — { en, zh } — so it displays correctly
@@ -1066,6 +1087,8 @@ async function start() {
   // Tolerate a hand-edited file that's missing a top-level key.
   store = { meetings: [], groups: [], people: [], attendance: [], users: [], ...store };
   if (!Array.isArray(store.users)) store.users = [];
+  store.settings = { trendGroupIds: [], ...(store.settings || {}) };
+  if (!Array.isArray(store.settings.trendGroupIds)) store.settings.trendGroupIds = [];
   // Both must run unconditionally — `||` would short-circuit the second once
   // the first finds something to migrate.
   const meetingIdsMigrated = migrateGroupMeetingIds(store);
