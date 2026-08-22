@@ -1363,10 +1363,13 @@
     // ─── History View ─────────────────────────────────────────────────────────
     const HistoryView = () => {
       const { data, loading, t, lang, canManage, refresh } = useApp();
-      const [filter, setFilter] = useState('all');
+      const [filter, setFilter] = useState(null);   // null = default to Small Group Meeting until user picks
       const [editing, setEditing] = useState(null);   // { record, members }
       const [expanded, setExpanded] = useState(() => new Set());
       if (loading) return <Spinner />;
+
+      const defaultMeeting = data.meetings.find(m => m.name?.en === 'Small Group Meeting');
+      const activeFilter = filter ?? defaultMeeting?.id ?? 'all';
 
       const toggleExpanded = (id) => setExpanded(s => {
         const next = new Set(s);
@@ -1392,7 +1395,7 @@
         catch (e) { alert(t.errGeneric(e.message)); }
       };
 
-      const filtered = data.attendance.filter(a => filter === 'all' || a.meetingId === filter);
+      const filtered = data.attendance.filter(a => activeFilter === 'all' || a.meetingId === activeFilter);
 
       const byDate = filtered.reduce((acc, rec) => {
         (acc[rec.date] = acc[rec.date] || []).push(rec);
@@ -1400,7 +1403,7 @@
       }, {});
       const sortedDates = Object.keys(byDate).sort((a, b) => b.localeCompare(a));
 
-      const chartGroups = (filter === 'all' ? data.groups : data.groups.filter(g => g.meetingIds.includes(filter)))
+      const chartGroups = (activeFilter === 'all' ? data.groups : data.groups.filter(g => g.meetingIds.includes(activeFilter)))
         .filter(g => data.attendance.some(a => a.groupId === g.id));
 
       const empty = (
@@ -1413,7 +1416,7 @@
         <div className="max-w-screen-xl mx-auto px-4 py-6">
           <h1 className="text-2xl font-bold text-gray-800 mb-4">{t.attendanceHistory}</h1>
 
-          <select value={filter} onChange={e => setFilter(e.target.value)}
+          <select value={activeFilter} onChange={e => setFilter(e.target.value)}
             className="border border-gray-300 rounded-xl px-3 py-2 text-sm mb-4 focus:outline-none focus:ring-2 focus:ring-indigo-400 bg-white shadow-sm" style={{width:'280px'}}>
             <option value="all">{t.allMeetings}</option>
             {data.meetings.map(m => <option key={m.id} value={m.id}>{localizedName(m, lang)}</option>)}
@@ -1488,7 +1491,7 @@
 
               {/* ── Right: charts ── */}
               <div className="w-1/2 min-w-0 space-y-4">
-                <AttendanceChart data={data} filter={filter} presentTip={t.chartPresentTip} title={t.attendanceTrend} lang={lang} />
+                <AttendanceChart data={data} filter={activeFilter} presentTip={t.chartPresentTip} title={t.attendanceTrend} lang={lang} />
                 {chartGroups.length > 0 && (
                   <>
                     <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wider px-1">{t.byGroup}</h2>
