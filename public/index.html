@@ -1500,6 +1500,38 @@
           </select>
 
           {filtered.length === 0 ? empty : (
+            <>
+              {/* ── Overall Attendance Trend: full width, above everything else.
+                  This signed-in super/admin's own pick of groups, combined into
+                  one total. Separate from — and independent of — the free-form
+                  By Group picker below, which anyone can adjust at any time. */}
+              <div className="mb-6">
+                <div className="flex items-center justify-between gap-2 px-1 mb-2">
+                  <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">{t.attendanceTrend}</h2>
+                  <div className="flex items-center gap-2">
+                    {trendGroups.length > 0 && (
+                      <button type="button" onClick={exportTrendCsv}
+                        className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg border border-gray-300 bg-white text-gray-600 hover:border-indigo-400 hover:text-indigo-600">
+                        <I.Download /> {t.exportCsv}
+                      </button>
+                    )}
+                    {canManage && !breakGlass && (
+                      <MultiSelectDropdown options={data.groups} selectedIds={new Set(trendGroupIds)}
+                        onToggle={toggleTrendGroup} lang={lang} placeholder={t.selectGroups} />
+                    )}
+                  </div>
+                </div>
+                {trendGroups.length > 0 ? (
+                  <AttendanceChart data={data} groups={trendGroups} presentTip={t.chartPresentTip} title="" lang={lang} />
+                ) : (
+                  <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4">
+                    <p className="text-sm text-gray-400">
+                      {breakGlass ? t.noTrendGroupsBreakGlass : canManage ? t.noTrendGroupsHint : t.noTrendGroups}
+                    </p>
+                  </div>
+                )}
+              </div>
+
             <div className="flex gap-6 items-start">
 
               {/* ── Left: attendance list ── */}
@@ -1575,37 +1607,8 @@
                 })}
               </div>
 
-              {/* ── Right: charts ── */}
+              {/* ── Right: By Group ── */}
               <div className="w-1/2 min-w-0 space-y-4">
-                {/* Overall Attendance Trend: this signed-in super/admin's own
-                    pick of groups, combined into one total. Separate from —
-                    and independent of — the free-form By Group picker below,
-                    which anyone can adjust at any time. */}
-                <div className="flex items-center justify-between gap-2 px-1 mb-2">
-                  <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">{t.attendanceTrend}</h2>
-                  <div className="flex items-center gap-2">
-                    {trendGroups.length > 0 && (
-                      <button type="button" onClick={exportTrendCsv}
-                        className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg border border-gray-300 bg-white text-gray-600 hover:border-indigo-400 hover:text-indigo-600">
-                        <I.Download /> {t.exportCsv}
-                      </button>
-                    )}
-                    {canManage && !breakGlass && (
-                      <MultiSelectDropdown options={data.groups} selectedIds={new Set(trendGroupIds)}
-                        onToggle={toggleTrendGroup} lang={lang} placeholder={t.selectGroups} />
-                    )}
-                  </div>
-                </div>
-                {trendGroups.length > 0 ? (
-                  <AttendanceChart data={data} groups={trendGroups} presentTip={t.chartPresentTip} title="" lang={lang} />
-                ) : (
-                  <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 mb-4">
-                    <p className="text-sm text-gray-400">
-                      {breakGlass ? t.noTrendGroupsBreakGlass : canManage ? t.noTrendGroupsHint : t.noTrendGroups}
-                    </p>
-                  </div>
-                )}
-
                 {activeSection && (
                   <>
                     <div className="flex items-center justify-between gap-2 px-1">
@@ -1632,6 +1635,7 @@
               </div>
 
             </div>
+            </>
           )}
         </div>
       );
