@@ -1142,34 +1142,27 @@
     const CHART_COLORS = ['#6366f1','#10b981','#f59e0b','#ef4444','#8b5cf6','#06b6d4'];
     const shortDate = (s) => new Date(s + 'T00:00:00').toLocaleDateString('en-US', { month:'short', day:'numeric' });
 
-    const AttendanceChart = ({ data, filter, presentTip, title, lang }) => {
+    const AttendanceChart = ({ data, groups, meetingId, presentTip, title, lang }) => {
       const canvasRef = useRef(null);
       const chartRef  = useRef(null);
 
       const { labels, datasets } = useMemo(() => {
-        const relevant = filter === 'all'
-          ? data.attendance
-          : data.attendance.filter(a => a.meetingId === filter);
-
+        const relevant = data.attendance.filter(a => a.meetingId === meetingId && groups.some(g => g.id === a.groupId));
         const dates = [...new Set(relevant.map(a => a.date))].sort();
         if (!dates.length) return { labels: [], datasets: [] };
 
-        const meetings = filter === 'all'
-          ? data.meetings
-          : data.meetings.filter(m => m.id === filter);
-
-        const ds = meetings.map((m, i) => {
-          const recs = relevant.filter(a => a.meetingId === m.id);
+        const ds = groups.map((g, i) => {
+          const recs = relevant.filter(a => a.groupId === g.id);
           return {
-            label: localizedName(m, lang),
+            label: localizedName(g, lang),
             data: dates.map(date => {
-              const day = recs.filter(a => a.date === date);
-              if (!day.length) return null;
-              return day.reduce((sum, r) => sum + r.records.filter(x => x.present).length, 0);
+              const rec = recs.find(a => a.date === date);
+              if (!rec) return null;
+              return rec.records.filter(x => x.present).length;
             }),
             borderColor: CHART_COLORS[i % CHART_COLORS.length],
-            backgroundColor: meetings.length === 1 ? 'rgba(99,102,241,0.08)' : 'transparent',
-            fill: meetings.length === 1,
+            backgroundColor: groups.length === 1 ? 'rgba(99,102,241,0.08)' : 'transparent',
+            fill: groups.length === 1,
             tension: 0.35,
             pointRadius: 4,
             pointHoverRadius: 6,
@@ -1178,7 +1171,7 @@
         });
 
         return { labels: dates.map(shortDate), datasets: ds };
-      }, [data.attendance, data.meetings, filter, lang]);
+      }, [data.attendance, groups, meetingId, lang]);
 
       useEffect(() => {
         if (!canvasRef.current || !labels.length) return;
@@ -1540,7 +1533,6 @@
 
               {/* ── Right: charts ── */}
               <div className="w-1/2 min-w-0 space-y-4">
-                <AttendanceChart data={data} filter={activeFilter} presentTip={t.chartPresentTip} title={t.attendanceTrend} lang={lang} />
                 {activeSection && (
                   <>
                     <div className="flex items-center justify-between gap-2 px-1">
@@ -1565,6 +1557,8 @@
                         );
                       })}
                     </div>
+                    <AttendanceChart data={data} groups={activeSection.groups.filter(g => activeGroupIds.has(g.id))}
+                      meetingId={activeChartMeetingId} presentTip={t.chartPresentTip} title={t.attendanceTrend} lang={lang} />
                     {activeSection.groups.filter(g => activeGroupIds.has(g.id)).map(g => (
                       <GroupBarChart key={g.id} group={g} meetingId={activeChartMeetingId} data={data}
                         presentLabel={t.chartPresentLabel} absentLabel={t.chartAbsentLabel} lang={lang} />
