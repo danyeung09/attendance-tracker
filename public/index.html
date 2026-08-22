@@ -61,6 +61,7 @@
         selectGroups: 'Select groups…',
         noTrendGroups: 'No groups are set up for this chart yet.',
         noTrendGroupsHint: 'Pick groups above to build your Overall Attendance Trend.',
+        noTrendGroupsBreakGlass: 'This is a personal preference tied to an account. Sign in with your own admin account (not the break-glass password) to set up your Overall Attendance Trend.',
         adminPasswordPh: 'Admin password',
         login: 'Sign In',
         cancel: 'Cancel',
@@ -241,6 +242,7 @@
         selectGroups: '選擇小組…',
         noTrendGroups: '尚未設定此圖表的小組。',
         noTrendGroupsHint: '請在上方選擇小組，建立您自己的整體出席趨勢。',
+        noTrendGroupsBreakGlass: '此為與帳號綁定的個人偏好設定。請使用您自己的管理員帳號（而非救援密碼）登入，以設定您的整體出席趨勢。',
         adminPasswordPh: '管理員密碼',
         login: '登入',
         cancel: '取消',
@@ -1426,7 +1428,7 @@
 
     // ─── History View ─────────────────────────────────────────────────────────
     const HistoryView = () => {
-      const { data, loading, t, lang, canManage, refresh, trendGroupIds, toggleTrendGroup } = useApp();
+      const { data, loading, t, lang, canManage, refresh, trendGroupIds, toggleTrendGroup, breakGlass } = useApp();
       const [filter, setFilter] = useState(null);   // null = default to Small Group Meeting until user picks
       const [editing, setEditing] = useState(null);   // { record, members }
       const [expanded, setExpanded] = useState(() => new Set());
@@ -1616,7 +1618,7 @@
                     which anyone can adjust at any time. */}
                 <div className="flex items-center justify-between gap-2 px-1 mb-2">
                   <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">{t.attendanceTrend}</h2>
-                  {canManage && (
+                  {canManage && !breakGlass && (
                     <MultiSelectDropdown options={data.groups} selectedIds={new Set(trendGroupIds)}
                       onToggle={toggleTrendGroup} lang={lang} placeholder={t.selectGroups} />
                   )}
@@ -1625,7 +1627,9 @@
                   <AttendanceChart data={data} groups={trendGroups} presentTip={t.chartPresentTip} title="" lang={lang} />
                 ) : (
                   <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 mb-4">
-                    <p className="text-sm text-gray-400">{canManage ? t.noTrendGroupsHint : t.noTrendGroups}</p>
+                    <p className="text-sm text-gray-400">
+                      {breakGlass ? t.noTrendGroupsBreakGlass : canManage ? t.noTrendGroupsHint : t.noTrendGroups}
+                    </p>
                   </div>
                 )}
 
