@@ -51,9 +51,6 @@ const SEED = {
     { id:'p6', firstName:'Sarah',   lastName:'Martinez', phone:'555-0106' },
   ],
   attendance: [],
-  // Which groups feed the shared "Overall Attendance Trend" chart in History.
-  // Set by an admin/super user in Admin > Trend; everyone else just views it.
-  settings: { trendGroupIds: [] },
 };
 
 // ─── Persistence helpers ──────────────────────────────────────────────────────
@@ -235,6 +232,12 @@ const publicUser = (u) => ({
 // a user can actually see or record attendance for.
 const focusGroupIds = (u) => (u && Array.isArray(u.focusGroupIds)) ? u.focusGroupIds : [];
 
+// A super/admin's own pick of groups for the "Overall Attendance Trend" chart
+// in History — personal to that account, like focusGroupIds above, not a
+// shared app setting. Every super/admin sets up their own; nothing here
+// restricts what they can see or record.
+const trendGroupIds = (u) => (u && Array.isArray(u.trendGroupIds)) ? u.trendGroupIds : [];
+
 function validateCredentials(username, password) {
   const name = normaliseUsername(username);
   if (!/^[a-z0-9._-]{3,32}$/.test(name)) {
@@ -303,7 +306,7 @@ function resolveSession(req) {
     const a = Buffer.from(String(payload.bg));
     const b = Buffer.from(adminFingerprint());
     if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return null;
-    return { role: 'admin', userId: null, username: 'break-glass admin', breakGlass: true, focusGroupIds: [] };
+    return { role: 'admin', userId: null, username: 'break-glass admin', breakGlass: true, focusGroupIds: [], trendGroupIds: [] };
   }
 
   if (typeof payload.uid !== 'string') return null;
@@ -315,6 +318,7 @@ function resolveSession(req) {
     role: user.role, userId: user.id,
     username: user.displayName || user.username, breakGlass: false,
     focusGroupIds: focusGroupIds(user),
+    trendGroupIds: trendGroupIds(user),
   };
 }
 
@@ -409,6 +413,7 @@ app.get('/api/session', (req, res) => {
     username:      session ? session.username : null,
     breakGlass:    session ? session.breakGlass : false,
     focusGroupIds: session ? session.focusGroupIds : [],
+    trendGroupIds: session ? session.trendGroupIds : [],
   });
 });
 
@@ -429,7 +434,10 @@ app.post('/api/login', route(async (req, res) => {
   }
   loginAttempts.delete(ip);
   setSessionCookie(req, res, issueUserToken(user));
-  res.json({ role: user.role, username: user.displayName || user.username, focusGroupIds: focusGroupIds(user) });
+  res.json({
+    role: user.role, username: user.displayName || user.username,
+    focusGroupIds: focusGroupIds(user), trendGroupIds: trendGroupIds(user),
+  });
 }));
 
 // Open registration: anyone may create an account. It lands as 'pending', which
@@ -456,7 +464,7 @@ app.post('/api/register', route(async (req, res) => {
   });
 
   setSessionCookie(req, res, issueUserToken(created));
-  res.json({ role: created.role, username: created.displayName, focusGroupIds: [] });
+  res.json({ role: created.role, username: created.displayName, focusGroupIds: [], trendGroupIds: [] });
 }));
 
 // Break-glass: signs in as an admin using ADMIN_PASSWORD with no account at all,
@@ -471,7 +479,7 @@ app.post('/api/login/break-glass', route(async (req, res) => {
   }
   loginAttempts.delete(ip);
   setSessionCookie(req, res, issueBreakGlassToken());
-  res.json({ role: 'admin', username: 'break-glass admin', breakGlass: true, focusGroupIds: [] });
+  res.json({ role: 'admin', username: 'break-glass admin', breakGlass: true, focusGroupIds: [], trendGroupIds: [] });
 }));
 
 app.post('/api/logout', (req, res) => {
@@ -490,7 +498,6 @@ app.get('/api/data', requireViewer, (req, res) => res.json({
   groups:     store.groups,
   people:     store.people,
   attendance: store.attendance,
-  settings:   store.settings,
 }));
 
 // ─── Users (admin only) ───────────────────────────────────────────────────────
@@ -638,21 +645,26 @@ app.patch('/api/me/focus-groups', requireViewer, route(async (req, res) => {
   res.json({ focusGroupIds: saved });
 }));
 
-// Shared app setting (not per-user, unlike focus-groups above): which groups
-// feed the "Overall Attendance Trend" chart in History for every viewer.
-// Admin or super only — everyone else just sees the resulting chart.
-app.put('/api/settings', requireSuper, route(async (req, res) => {
-  const { trendGroupIds } = req.body || {};
-  if (!Array.isArray(trendGroupIds) || trendGroupIds.some(id => typeof id !== 'string')) {
-    throw new HttpError(400, 'trendGroupIds must be an array of strings');
+// A super/admin's own pick of groups for the "Overall Attendance Trend" chart
+// in History — personal to their account, like focus-groups above, not a
+// shared app setting. Each super/admin sets up their own; it never restricts
+// what they can see or record.
+app.patch('/api/me/trend-groups', requireSuper, route(async (req, res) => {
+  if (req.session.breakGlass) {
+    throw new HttpError(400, 'The break-glass admin has no account to save a preference against.');
+  }
+  const { groupIds } = req.body || {};
+  if (!Array.isArray(groupIds) || groupIds.some(id => typeof id !== 'string')) {
+    throw new HttpError(400, 'groupIds must be an array of strings');
   }
   const saved = await commit(s => {
+    const user = findUserId(s, req.session.userId);
+    if (!user) throw new HttpError(404, 'User not found');
     const known = new Set(s.groups.map(g => g.id));
-    s.settings = s.settings || {};
-    s.settings.trendGroupIds = [...new Set(trendGroupIds)].filter(id => known.has(id));
-    return s.settings;
+    user.trendGroupIds = [...new Set(groupIds)].filter(id => known.has(id));
+    return user.trendGroupIds;
   });
-  res.json(saved);
+  res.json({ trendGroupIds: saved });
 }));
 
 // A meeting or group name is bilingual — { en, zh } — so it displays correctly
@@ -1087,8 +1099,6 @@ async function start() {
   // Tolerate a hand-edited file that's missing a top-level key.
   store = { meetings: [], groups: [], people: [], attendance: [], users: [], ...store };
   if (!Array.isArray(store.users)) store.users = [];
-  store.settings = { trendGroupIds: [], ...(store.settings || {}) };
-  if (!Array.isArray(store.settings.trendGroupIds)) store.settings.trendGroupIds = [];
   // Both must run unconditionally — `||` would short-circuit the second once
   // the first finds something to migrate.
   const meetingIdsMigrated = migrateGroupMeetingIds(store);
