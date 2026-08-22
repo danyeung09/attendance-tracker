@@ -1366,6 +1366,7 @@
       const [filter, setFilter] = useState(null);   // null = default to Small Group Meeting until user picks
       const [editing, setEditing] = useState(null);   // { record, members }
       const [expanded, setExpanded] = useState(() => new Set());
+      const [dateOverrides, setDateOverrides] = useState(() => new Set());
       if (loading) return <Spinner />;
 
       const defaultMeeting = data.meetings.find(m => m.name?.en === 'Small Group Meeting');
@@ -1374,6 +1375,12 @@
       const toggleExpanded = (id) => setExpanded(s => {
         const next = new Set(s);
         if (next.has(id)) next.delete(id); else next.add(id);
+        return next;
+      });
+
+      const toggleDate = (date) => setDateOverrides(s => {
+        const next = new Set(s);
+        if (next.has(date)) next.delete(date); else next.add(date);
         return next;
       });
 
@@ -1403,6 +1410,14 @@
       }, {});
       const sortedDates = Object.keys(byDate).sort((a, b) => b.localeCompare(a));
 
+      // Only the most recent session date of each meeting shows its group
+      // cards by default; older sessions collapse to just the date until clicked.
+      const latestDateByMeeting = filtered.reduce((acc, rec) => {
+        if (!acc[rec.meetingId] || rec.date > acc[rec.meetingId]) acc[rec.meetingId] = rec.date;
+        return acc;
+      }, {});
+      const isDefaultOpen = (date) => byDate[date].every(rec => latestDateByMeeting[rec.meetingId] === date);
+
       const chartGroups = (activeFilter === 'all' ? data.groups : data.groups.filter(g => g.meetingIds.includes(activeFilter)))
         .filter(g => data.attendance.some(a => a.groupId === g.id));
 
@@ -1427,9 +1442,16 @@
 
               {/* ── Left: attendance list ── */}
               <div className="w-1/2 min-w-0 space-y-5">
-                {sortedDates.length === 0 ? empty : sortedDates.map(date => (
+                {sortedDates.length === 0 ? empty : sortedDates.map(date => {
+                  const dateOpen = isDefaultOpen(date) !== dateOverrides.has(date);
+                  return (
                   <div key={date}>
-                    <h2 className="text-sm font-semibold text-gray-500 mb-2 px-1">{fmtDate(date, t.locale)}</h2>
+                    <button type="button" onClick={() => toggleDate(date)}
+                      className="flex items-center gap-1.5 text-sm font-semibold text-gray-500 mb-2 px-1 hover:text-gray-700">
+                      <span className={`transition-transform ${dateOpen ? 'rotate-180' : ''}`}><I.Chevron /></span>
+                      {fmtDate(date, t.locale)}
+                    </button>
+                    {dateOpen && (
                     <div className="space-y-2">
                       {byDate[date].map(rec => {
                         const meeting = data.meetings.find(m => m.id === rec.meetingId);
@@ -1485,8 +1507,10 @@
                         );
                       })}
                     </div>
+                    )}
                   </div>
-                ))}
+                  );
+                })}
               </div>
 
               {/* ── Right: charts ── */}
