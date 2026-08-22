@@ -1226,19 +1226,19 @@
     };
 
     // ─── Group Bar Chart ──────────────────────────────────────────────────────
-    const GroupBarChart = ({ group, data, presentLabel, absentLabel, lang }) => {
+    const GroupBarChart = ({ group, meetingId, data, presentLabel, absentLabel, lang }) => {
       const canvasRef = useRef(null);
       const chartRef  = useRef(null);
 
       const { labels, presentData, absentData } = useMemo(() => {
-        const recs  = data.attendance.filter(a => a.groupId === group.id);
+        const recs  = data.attendance.filter(a => a.groupId === group.id && a.meetingId === meetingId);
         const dates = [...recs.map(a => a.date)].sort();
         return {
           labels:      dates.map(shortDate),
           presentData: dates.map(d => { const r = recs.find(a => a.date === d); return r ? r.records.filter(x => x.present).length : 0; }),
           absentData:  dates.map(d => { const r = recs.find(a => a.date === d); return r ? r.records.filter(x => !x.present).length : 0; }),
         };
-      }, [data.attendance, group.id]);
+      }, [data.attendance, group.id, meetingId]);
 
       useEffect(() => {
         if (!canvasRef.current || !labels.length) return;
@@ -1271,11 +1271,11 @@
 
       if (!labels.length) return null;
 
-      const meetingNames = data.meetings.filter(m => group.meetingIds.includes(m.id)).map(m => localizedName(m, lang)).join(' · ');
+      const meeting = data.meetings.find(m => m.id === meetingId);
       return (
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4">
           <p className="font-semibold text-gray-800 text-sm">{localizedName(group, lang)}</p>
-          <p className="text-xs text-gray-400 mb-2">{meetingNames}</p>
+          <p className="text-xs text-gray-400 mb-2">{meeting ? localizedName(meeting, lang) : ''}</p>
           <canvas ref={canvasRef} />
         </div>
       );
@@ -1566,7 +1566,7 @@
                       })}
                     </div>
                     {activeSection.groups.filter(g => activeGroupIds.has(g.id)).map(g => (
-                      <GroupBarChart key={g.id} group={g} data={data}
+                      <GroupBarChart key={g.id} group={g} meetingId={activeChartMeetingId} data={data}
                         presentLabel={t.chartPresentLabel} absentLabel={t.chartAbsentLabel} lang={lang} />
                     ))}
                   </>
