@@ -62,6 +62,7 @@
         noTrendGroups: 'No groups are set up for this chart yet.',
         noTrendGroupsHint: 'Pick groups above to build your Overall Attendance Trend.',
         noTrendGroupsBreakGlass: 'This is a personal preference tied to an account. Sign in with your own admin account (not the break-glass password) to set up your Overall Attendance Trend.',
+        exportCsv: 'Export CSV',
         adminPasswordPh: 'Admin password',
         login: 'Sign In',
         cancel: 'Cancel',
@@ -243,6 +244,7 @@
         noTrendGroups: '尚未設定此圖表的小組。',
         noTrendGroupsHint: '請在上方選擇小組，建立您自己的整體出席趨勢。',
         noTrendGroupsBreakGlass: '此為與帳號綁定的個人偏好設定。請使用您自己的管理員帳號（而非救援密碼）登入，以設定您的整體出席趨勢。',
+        exportCsv: '匯出 CSV',
         adminPasswordPh: '管理員密碼',
         login: '登入',
         cancel: '取消',
@@ -416,6 +418,27 @@
         rows.push(row);
       }
       return { rows };
+    }
+
+    // ─── CSV export ───────────────────────────────────────────────────────────
+    // Quotes a field only when it needs it (contains a comma, quote or
+    // newline), doubling any internal quotes — the inverse of parseCSV above.
+    const csvField = (v) => {
+      const s = String(v ?? '');
+      return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+    };
+
+    function downloadCSV(filename, rows) {
+      const csv = rows.map(row => row.map(csvField).join(',')).join('\r\n');
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
     }
 
     const todayStr = () => {
@@ -699,6 +722,7 @@
       SignOut:  () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>,
       Key:      () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" /></svg>,
       Chevron:  () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>,
+      Download: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1M8 12l4 4m0 0l4-4m-4 4V4" /></svg>,
       Star:     ({ filled }) => (
         <svg className="w-5 h-5" viewBox="0 0 24 24" fill={filled ? 'currentColor' : 'none'} stroke="currentColor">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={filled ? 0 : 1.5}
@@ -1495,6 +1519,24 @@
       // stable across visits rather than reset per session.
       const trendGroups = data.groups.filter(g => trendGroupIds.includes(g.id));
 
+      // One column per trend group plus a combined Total, one row per date —
+      // the same figures the chart above plots, just laid out for a spreadsheet.
+      const exportTrendCsv = () => {
+        const relevant = data.attendance.filter(a => trendGroups.some(g => g.id === a.groupId));
+        const dates = [...new Set(relevant.map(a => a.date))].sort();
+        const header = ['Date', ...trendGroups.map(g => localizedName(g, lang)), 'Total'];
+        const rows = dates.map(date => {
+          const day = relevant.filter(a => a.date === date);
+          const perGroup = trendGroups.map(g => {
+            const rec = day.find(a => a.groupId === g.id);
+            return rec ? rec.records.filter(x => x.present).length : '';
+          });
+          const total = day.reduce((sum, r) => sum + r.records.filter(x => x.present).length, 0);
+          return [date, ...perGroup, total];
+        });
+        downloadCSV(`overall-attendance-trend-${todayStr()}.csv`, [header, ...rows]);
+      };
+
       // Group trends are shown for one meeting at a time, picked from a
       // dropdown, so an "All meetings" view doesn't dump every meeting's
       // group charts on screen at once.
@@ -1618,10 +1660,18 @@
                     which anyone can adjust at any time. */}
                 <div className="flex items-center justify-between gap-2 px-1 mb-2">
                   <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">{t.attendanceTrend}</h2>
-                  {canManage && !breakGlass && (
-                    <MultiSelectDropdown options={data.groups} selectedIds={new Set(trendGroupIds)}
-                      onToggle={toggleTrendGroup} lang={lang} placeholder={t.selectGroups} />
-                  )}
+                  <div className="flex items-center gap-2">
+                    {trendGroups.length > 0 && (
+                      <button type="button" onClick={exportTrendCsv}
+                        className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg border border-gray-300 bg-white text-gray-600 hover:border-indigo-400 hover:text-indigo-600">
+                        <I.Download /> {t.exportCsv}
+                      </button>
+                    )}
+                    {canManage && !breakGlass && (
+                      <MultiSelectDropdown options={data.groups} selectedIds={new Set(trendGroupIds)}
+                        onToggle={toggleTrendGroup} lang={lang} placeholder={t.selectGroups} />
+                    )}
+                  </div>
                 </div>
                 {trendGroups.length > 0 ? (
                   <AttendanceChart data={data} groups={trendGroups} presentTip={t.chartPresentTip} title="" lang={lang} />
