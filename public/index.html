@@ -29,7 +29,7 @@
         inDays: n => `In ${n} days`,
         groupCount: n => `${n} group${n!==1?'s':''}`,
         sessionsRecorded: n => `${n} session${n!==1?'s':''} recorded`,
-        noRecordsToday: 'No records today',
+        noRecordsFor: date => `No records for ${date}`,
         overview: 'Overview',
         labelPeople: 'People',
         labelGroups: 'Groups',
@@ -210,7 +210,7 @@
         inDays: n => `${n}天後`,
         groupCount: n => `${n} 個小組`,
         sessionsRecorded: n => `已記錄 ${n} 次`,
-        noRecordsToday: '今天暫無記錄',
+        noRecordsFor: date => `${date} 暫無記錄`,
         overview: '概覽',
         labelPeople: '人數',
         labelGroups: '小組',
@@ -444,10 +444,23 @@
       return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
     };
 
+    // Meetings happen weekly, not daily, so "today" is almost never the date
+    // that actually needs attendance — this is. On the meeting's own weekday
+    // it's today; any other day it's the most recent occurrence of that
+    // weekday (e.g. asked on a Saturday for a Friday meeting, it's yesterday).
+    const lastMeetingDate = (dayOfWeek, ref = new Date()) => {
+      const d = new Date(ref);
+      d.setDate(d.getDate() - ((d.getDay() - dayOfWeek + 7) % 7));
+      return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+    };
+
     const fmtDate = (s, locale = 'en-US') =>
       new Date(s + 'T00:00:00').toLocaleDateString(locale, {
         weekday:'long', year:'numeric', month:'long', day:'numeric'
       });
+
+    const fmtDateShort = (s, locale = 'en-US') =>
+      new Date(s + 'T00:00:00').toLocaleDateString(locale, { month:'short', day:'numeric' });
 
     // ─── API helpers ──────────────────────────────────────────────────────────
     // Registered by the Provider, so a session rejected anywhere in the app
@@ -870,8 +883,9 @@
 
           <div className="grid gap-4 sm:grid-cols-2 mb-8">
             {data.meetings.map(m => {
-              const groups = data.groups.filter(g => g.meetingIds.includes(m.id));
-              const recorded = data.attendance.filter(a => a.meetingId === m.id && a.date === today).length;
+              const groups   = data.groups.filter(g => g.meetingIds.includes(m.id));
+              const lastDate = lastMeetingDate(m.dayOfWeek);
+              const recorded = data.attendance.filter(a => a.meetingId === m.id && a.date === lastDate).length;
               const isToday = m.dayOfWeek === dow;
               return (
                 <div key={m.id} onClick={() => navigate({ name:'meeting', meetingId:m.id })}
@@ -882,7 +896,7 @@
                   <div className="flex gap-4 text-sm text-gray-600">
                     <span className="flex items-center gap-1"><I.Users />{t.groupCount(groups.length)}</span>
                     <span className={`font-medium ${recorded > 0 ? 'text-green-600' : 'text-gray-400'}`}>
-                      {recorded > 0 ? t.sessionsRecorded(recorded) : t.noRecordsToday}
+                      {recorded > 0 ? t.sessionsRecorded(recorded) : t.noRecordsFor(fmtDateShort(lastDate, t.locale))}
                     </span>
                   </div>
                 </div>
@@ -917,21 +931,23 @@
       const [showOthers, setShowOthers] = useState(false);
       if (loading) return <Spinner />;
 
-      const meeting = data.meetings.find(m => m.id === view.meetingId);
-      const groups  = data.groups.filter(g => g.meetingIds.includes(view.meetingId));
-      const today   = todayStr();
+      const meeting  = data.meetings.find(m => m.id === view.meetingId);
+      const groups   = data.groups.filter(g => g.meetingIds.includes(view.meetingId));
       if (!meeting) return null;
+      // The meeting's own most recent scheduled date, not literal today —
+      // this meeting might not fall on today's weekday at all.
+      const lastDate = lastMeetingDate(meeting.dayOfWeek);
 
       const focusGroups = groups.filter(g => focusGroupIds.includes(g.id));
       const otherGroups = groups.filter(g => !focusGroupIds.includes(g.id));
 
       const GroupCard = ({ g }) => {
         const members = data.people.filter(p => g.memberIds.includes(p.id));
-        const rec = data.attendance.find(a => a.meetingId===view.meetingId && a.groupId===g.id && a.date===today);
+        const rec = data.attendance.find(a => a.meetingId===view.meetingId && a.groupId===g.id && a.date===lastDate);
         const presentCount = rec ? rec.records.filter(r => r.present).length : null;
         const pinned = focusGroupIds.includes(g.id);
         return (
-          <div onClick={() => navigate({ name:'attendance', meetingId:view.meetingId, groupId:g.id })}
+          <div onClick={() => navigate({ name:'attendance', meetingId:view.meetingId, groupId:g.id, date:lastDate })}
             className="group bg-white rounded-2xl shadow-sm border border-gray-100 p-5 cursor-pointer hover:shadow-md transition-shadow">
             <div className="flex items-start justify-between gap-3">
               <div className="flex items-start gap-2 min-w-0">
@@ -1014,7 +1030,7 @@
       const meeting = data.meetings.find(m => m.id === view.meetingId);
       const group   = data.groups.find(g => g.id === view.groupId);
 
-      const [date,     setDate]     = useState(todayStr);
+      const [date,     setDate]     = useState(() => view.date || (meeting ? lastMeetingDate(meeting.dayOfWeek) : todayStr()));
       const [present,  setPresent]  = useState({});
       const [saving,   setSaving]   = useState(false);
       const [dirty,    setDirty]    = useState(false);   // unsaved local marks
@@ -1046,15 +1062,18 @@
         return init;
       };
 
-      // Navigating here for a different session — a new group, or History's
-      // "edit" jumping straight to a past date — resets the date field to
-      // match. Without this, switching groups kept whatever date the previous
-      // session happened to be showing.
+      // Navigating here for a different session — a new group, or a past
+      // date picked from Previous Sessions below — resets the date field to
+      // match. Falls back to the meeting's own most recent occurrence, not
+      // literal today, since a weekly meeting rarely falls on today. Depends
+      // on dayOfWeek rather than `meeting` itself so an unrelated data
+      // refresh (e.g. the navbar's refresh button) can't reset in-progress
+      // edits — dayOfWeek only changes if this meeting's schedule is edited.
       useEffect(() => {
-        setDate(view.date || todayStr());
+        setDate(view.date || (meeting ? lastMeetingDate(meeting.dayOfWeek) : todayStr()));
         setDirty(false);
         setConflict(null);
-      }, [view.meetingId, view.groupId, view.date]);
+      }, [view.meetingId, view.groupId, view.date, meeting?.dayOfWeek]);
 
       // Re-sync when the session on screen changes *or* when the server copy does.
       // `data` was missing from these deps, so refreshing left the ticks showing
