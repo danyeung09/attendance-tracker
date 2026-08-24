@@ -1491,9 +1491,9 @@
 
       // One column per trend group plus a combined Total, one row per date —
       // the same figures the chart above plots, just laid out for a spreadsheet.
-      // Followed by a per-member-per-date detail table (name + group, not
-      // shown on the chart itself) so the export can answer "who" as well
-      // as "how many".
+      // Followed by a per-member detail table (group + name, not shown on the
+      // chart itself): one row per group+member, one column per date, so same
+      // -date attendance lines up side by side instead of repeating rows.
       const exportTrendCsv = () => {
         const relevant = data.attendance.filter(a =>
           trendGroups.some(g => g.id === a.groupId) && (activeFilter === 'all' || a.meetingId === activeFilter));
@@ -1509,16 +1509,34 @@
           return [date, ...perGroup, total];
         });
 
-        const detailHeader = ['Date', 'Name', 'Group', 'Present'];
-        const detailRows = [];
-        dates.forEach(date => {
-          relevant.filter(a => a.date === date).forEach(rec => {
-            const group = trendGroups.find(g => g.id === rec.groupId);
-            rec.records.forEach(r => {
-              const person = data.people.find(p => p.id === r.personId);
-              detailRows.push([date, person ? localizedName(person, lang) : '', group ? localizedName(group, lang) : '', r.present ? 'Yes' : 'No']);
-            });
+        const personName = (personId) => {
+          const p = data.people.find(x => x.id === personId);
+          return p ? `${p.firstName} ${p.lastName}`.trim() : '';
+        };
+
+        const memberKeys = [];
+        const seenKeys = new Set();
+        relevant.forEach(rec => {
+          rec.records.forEach(r => {
+            const key = `${rec.groupId}|${r.personId}`;
+            if (!seenKeys.has(key)) { seenKeys.add(key); memberKeys.push({ groupId: rec.groupId, personId: r.personId }); }
           });
+        });
+        memberKeys.sort((a, b) => {
+          const ga = localizedName(trendGroups.find(g => g.id === a.groupId), lang);
+          const gb = localizedName(trendGroups.find(g => g.id === b.groupId), lang);
+          return ga !== gb ? ga.localeCompare(gb) : personName(a.personId).localeCompare(personName(b.personId));
+        });
+
+        const detailHeader = ['Group', 'Name', ...dates];
+        const detailRows = memberKeys.map(({ groupId, personId }) => {
+          const group = trendGroups.find(g => g.id === groupId);
+          const perDate = dates.map(date => {
+            const rec = relevant.find(a => a.date === date && a.groupId === groupId);
+            const r = rec && rec.records.find(x => x.personId === personId);
+            return r ? (r.present ? 'Yes' : 'No') : '';
+          });
+          return [group ? localizedName(group, lang) : '', personName(personId), ...perDate];
         });
 
         downloadCSV(`overall-attendance-trend-${todayStr()}.csv`,
