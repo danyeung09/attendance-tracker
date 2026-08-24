@@ -1491,6 +1491,9 @@
 
       // One column per trend group plus a combined Total, one row per date —
       // the same figures the chart above plots, just laid out for a spreadsheet.
+      // Followed by a per-member-per-date detail table (name + group, not
+      // shown on the chart itself) so the export can answer "who" as well
+      // as "how many".
       const exportTrendCsv = () => {
         const relevant = data.attendance.filter(a =>
           trendGroups.some(g => g.id === a.groupId) && (activeFilter === 'all' || a.meetingId === activeFilter));
@@ -1505,7 +1508,21 @@
           const total = day.reduce((sum, r) => sum + r.records.filter(x => x.present).length, 0);
           return [date, ...perGroup, total];
         });
-        downloadCSV(`overall-attendance-trend-${todayStr()}.csv`, [header, ...rows]);
+
+        const detailHeader = ['Date', 'Name', 'Group', 'Present'];
+        const detailRows = [];
+        dates.forEach(date => {
+          relevant.filter(a => a.date === date).forEach(rec => {
+            const group = trendGroups.find(g => g.id === rec.groupId);
+            rec.records.forEach(r => {
+              const person = data.people.find(p => p.id === r.personId);
+              detailRows.push([date, person ? localizedName(person, lang) : '', group ? localizedName(group, lang) : '', r.present ? 'Yes' : 'No']);
+            });
+          });
+        });
+
+        downloadCSV(`overall-attendance-trend-${todayStr()}.csv`,
+          [header, ...rows, [], detailHeader, ...detailRows]);
       };
 
       // Group trends are shown for one meeting at a time, picked from a
