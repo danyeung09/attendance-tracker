@@ -1253,15 +1253,18 @@
     const CHART_COLORS = ['#6366f1','#10b981','#f59e0b','#ef4444','#8b5cf6','#06b6d4'];
     const shortDate = (s) => new Date(s + 'T00:00:00').toLocaleDateString('en-US', { month:'short', day:'numeric' });
 
-    const AttendanceChart = ({ data, groups, presentTip, title, lang }) => {
+    const AttendanceChart = ({ data, groups, meetingId, presentTip, title, lang }) => {
       const canvasRef = useRef(null);
       const chartRef  = useRef(null);
 
       // One combined line: the total present across every group passed in,
       // per date. This is the shared "Overall Attendance Trend" — per-group
-      // breakdowns live in the separate By Group section, not here.
+      // breakdowns live in the separate By Group section, not here. When a
+      // specific meeting is picked (not "all"), the trend narrows to that
+      // meeting's own records so it matches what the meeting filter implies.
       const { labels, datasets } = useMemo(() => {
-        const relevant = data.attendance.filter(a => groups.some(g => g.id === a.groupId));
+        const relevant = data.attendance.filter(a =>
+          groups.some(g => g.id === a.groupId) && (!meetingId || meetingId === 'all' || a.meetingId === meetingId));
         const dates = [...new Set(relevant.map(a => a.date))].sort();
         if (!dates.length) return { labels: [], datasets: [] };
 
@@ -1284,7 +1287,7 @@
             spanGaps: false,
           }],
         };
-      }, [data.attendance, groups, lang]);
+      }, [data.attendance, groups, meetingId, lang]);
 
       useEffect(() => {
         if (!canvasRef.current || !labels.length) return;
@@ -1480,15 +1483,17 @@
         .filter(g => data.attendance.some(a => a.groupId === g.id));
 
       // The Overall Attendance Trend is this signed-in super/admin's own pick
-      // of groups, combined into one total — independent of the meeting/group
-      // pickers below and of the top meeting filter, since it's meant to stay
-      // stable across visits rather than reset per session.
+      // of groups, combined into one total — independent of the By Group
+      // picker below, since it's meant to stay stable across visits rather
+      // than reset per session. It still narrows to the top meeting filter,
+      // same as the rest of the History page.
       const trendGroups = data.groups.filter(g => trendGroupIds.includes(g.id));
 
       // One column per trend group plus a combined Total, one row per date —
       // the same figures the chart above plots, just laid out for a spreadsheet.
       const exportTrendCsv = () => {
-        const relevant = data.attendance.filter(a => trendGroups.some(g => g.id === a.groupId));
+        const relevant = data.attendance.filter(a =>
+          trendGroups.some(g => g.id === a.groupId) && (activeFilter === 'all' || a.meetingId === activeFilter));
         const dates = [...new Set(relevant.map(a => a.date))].sort();
         const header = ['Date', ...trendGroups.map(g => localizedName(g, lang)), 'Total'];
         const rows = dates.map(date => {
@@ -1565,7 +1570,7 @@
                   </div>
                 </div>
                 {trendGroups.length > 0 ? (
-                  <AttendanceChart data={data} groups={trendGroups} presentTip={t.chartPresentTip} title="" lang={lang} />
+                  <AttendanceChart data={data} groups={trendGroups} meetingId={activeFilter} presentTip={t.chartPresentTip} title="" lang={lang} />
                 ) : (
                   <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4">
                     <p className="text-sm text-gray-400">
