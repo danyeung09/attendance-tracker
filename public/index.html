@@ -28,7 +28,7 @@
         tomorrow: 'Tomorrow',
         inDays: n => `In ${n} days`,
         groupCount: n => `${n} group${n!==1?'s':''}`,
-        sessionsRecorded: n => `${n} session${n!==1?'s':''} recorded`,
+        sessionsRecorded: (n, date) => `${n} session${n!==1?'s':''} recorded for ${date}`,
         noRecordsFor: date => `No records for ${date}`,
         overview: 'Overview',
         labelPeople: 'People',
@@ -41,6 +41,8 @@
         noRecord: 'No record',
         presentOf: (p, tot) => `${p}/${tot} present`,
         sessionDate: 'Session Date',
+        alreadyRecordedNotice: 'This date already has a saved record — changes here update it.',
+        newSessionNotice: 'No record yet for this date — this is a new session.',
         previousSessions: 'Previous Sessions',
         presentCount: (p, tot) => `${p}/${tot} Present`,
         allPresent: 'All Present',
@@ -209,7 +211,7 @@
         tomorrow: '明天',
         inDays: n => `${n}天後`,
         groupCount: n => `${n} 個小組`,
-        sessionsRecorded: n => `已記錄 ${n} 次`,
+        sessionsRecorded: (n, date) => `${date} 已記錄 ${n} 次`,
         noRecordsFor: date => `${date} 暫無記錄`,
         overview: '概覽',
         labelPeople: '人數',
@@ -222,6 +224,8 @@
         noRecord: '無記錄',
         presentOf: (p, tot) => `${p}/${tot} 出席`,
         sessionDate: '聚會日期',
+        alreadyRecordedNotice: '此日期已有記錄，在此修改會更新該記錄。',
+        newSessionNotice: '此日期尚無記錄，是新的一次聚會。',
         previousSessions: '過往記錄',
         presentCount: (p, tot) => `${p}/${tot} 出席`,
         allPresent: '全部出席',
@@ -454,6 +458,17 @@
       const d = new Date(ref);
       d.setDate(d.getDate() - ((d.getDay() - dayOfWeek + 7) % 7));
       return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+    };
+
+    // The session a leader is most likely about to record. Usually the meeting's
+    // own last occurrence — but if that one is already recorded for this group,
+    // it is a past session, not the one in hand, and opening it shows last
+    // week's ticks with the button already reading "Saved", as though today had
+    // been taken. Start a blank sheet dated today instead; the recorded session
+    // stays one click away under Previous Sessions.
+    const defaultSessionDate = (dayOfWeek, isRecorded) => {
+      const last = lastMeetingDate(dayOfWeek);
+      return isRecorded(last) ? todayStr() : last;
     };
 
     const fmtDate = (s, locale = 'en-US') =>
@@ -898,7 +913,7 @@
                   <div className="flex gap-4 text-sm text-gray-600">
                     <span className="flex items-center gap-1"><I.Users />{t.groupCount(groups.length)}</span>
                     <span className={`font-medium ${recorded > 0 ? 'text-green-600' : 'text-gray-400'}`}>
-                      {recorded > 0 ? t.sessionsRecorded(recorded) : t.noRecordsFor(fmtDateShort(lastDate, t.locale))}
+                      {recorded > 0 ? t.sessionsRecorded(recorded, fmtDateShort(lastDate, t.locale)) : t.noRecordsFor(fmtDateShort(lastDate, t.locale))}
                     </span>
                   </div>
                 </div>
@@ -936,20 +951,20 @@
       const meeting  = data.meetings.find(m => m.id === view.meetingId);
       const groups   = data.groups.filter(g => g.meetingIds.includes(view.meetingId));
       if (!meeting) return null;
-      // The meeting's own most recent scheduled date, not literal today —
-      // this meeting might not fall on today's weekday at all.
-      const lastDate = lastMeetingDate(meeting.dayOfWeek);
-
       const focusGroups = groups.filter(g => focusGroupIds.includes(g.id));
       const otherGroups = groups.filter(g => !focusGroupIds.includes(g.id));
 
       const GroupCard = ({ g }) => {
         const members = data.people.filter(p => g.memberIds.includes(p.id));
-        const rec = data.attendance.find(a => a.meetingId===view.meetingId && a.groupId===g.id && a.date===lastDate);
+        // The same session clicking this card opens, so the badge can't claim
+        // "Recorded" about last week while the page opens a blank sheet.
+        const cardDate = defaultSessionDate(meeting.dayOfWeek, d => data.attendance.some(
+          a => a.meetingId===view.meetingId && a.groupId===g.id && a.date===d));
+        const rec = data.attendance.find(a => a.meetingId===view.meetingId && a.groupId===g.id && a.date===cardDate);
         const presentCount = rec ? rec.records.filter(r => r.present).length : null;
         const pinned = focusGroupIds.includes(g.id);
         return (
-          <div onClick={() => navigate({ name:'attendance', meetingId:view.meetingId, groupId:g.id, date:lastDate })}
+          <div onClick={() => navigate({ name:'attendance', meetingId:view.meetingId, groupId:g.id })}
             className="group bg-white rounded-2xl shadow-sm border border-gray-100 p-5 cursor-pointer hover:shadow-md transition-shadow">
             <div className="flex items-start justify-between gap-3">
               <div className="flex items-start gap-2 min-w-0">
@@ -968,9 +983,13 @@
                   <>
                     <span className="inline-block bg-green-100 text-green-700 text-xs font-semibold px-2 py-0.5 rounded-full">{t.recorded}</span>
                     <p className="text-xs text-gray-500 mt-1">{t.presentOf(presentCount, members.length)}</p>
+                    <p className="text-xs text-gray-400">{fmtDateShort(cardDate, t.locale)}</p>
                   </>
                 ) : (
-                  <span className="inline-block bg-gray-100 text-gray-500 text-xs px-2 py-0.5 rounded-full">{t.noRecord}</span>
+                  <>
+                    <span className="inline-block bg-gray-100 text-gray-500 text-xs px-2 py-0.5 rounded-full">{t.noRecord}</span>
+                    <p className="text-xs text-gray-400 mt-1">{fmtDateShort(cardDate, t.locale)}</p>
+                  </>
                 )}
               </div>
             </div>
@@ -1032,7 +1051,14 @@
       const meeting = data.meetings.find(m => m.id === view.meetingId);
       const group   = data.groups.find(g => g.id === view.groupId);
 
-      const [date,     setDate]     = useState(() => view.date || (meeting ? lastMeetingDate(meeting.dayOfWeek) : todayStr()));
+      // Whether this meeting+group already has a saved session on that date.
+      const recordedOn = (d) => data.attendance.some(
+        a => a.meetingId === view.meetingId && a.groupId === view.groupId && a.date === d
+      );
+      const openingDate = () =>
+        view.date || (meeting ? defaultSessionDate(meeting.dayOfWeek, recordedOn) : todayStr());
+
+      const [date,     setDate]     = useState(openingDate);
       const [present,  setPresent]  = useState({});
       const [saving,   setSaving]   = useState(false);
       const [dirty,    setDirty]    = useState(false);   // unsaved local marks
@@ -1072,7 +1098,7 @@
       // refresh (e.g. the navbar's refresh button) can't reset in-progress
       // edits — dayOfWeek only changes if this meeting's schedule is edited.
       useEffect(() => {
-        setDate(view.date || (meeting ? lastMeetingDate(meeting.dayOfWeek) : todayStr()));
+        setDate(openingDate());
         setDirty(false);
         setConflict(null);
       }, [view.meetingId, view.groupId, view.date, meeting?.dayOfWeek]);
@@ -1155,6 +1181,9 @@
             <label className="block text-sm font-medium text-gray-700 mb-1">{t.sessionDate}</label>
             <input type="date" value={date} onChange={e => { setDate(e.target.value); setDirty(false); setConflict(null); }}
               className="border border-gray-300 rounded-lg px-3 py-2 text-sm w-full focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+            <p className={`text-xs mt-2 ${stored ? 'text-amber-700' : 'text-gray-500'}`}>
+              {stored ? t.alreadyRecordedNotice : t.newSessionNotice}
+            </p>
           </div>
 
           {pastSessions.length > 0 && (
