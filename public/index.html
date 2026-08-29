@@ -35,6 +35,9 @@
         labelGroups: 'Groups',
         labelSessions: 'Sessions',
         every: 'Every',
+        anyDay: 'Any day',
+        anyDayOption: 'Any day of the week',
+        anyDayHint: 'Pick this when each group chooses its own night — attendance is then tracked by week.',
         noGroupsAdmin: 'No groups yet — add them in Admin mode.',
         memberCount: n => `${n} member${n!==1?'s':''}`,
         recorded: 'Recorded',
@@ -219,6 +222,9 @@
         labelGroups: '小組',
         labelSessions: '記錄',
         every: '每',
+        anyDay: '任何一天',
+        anyDayOption: '一週內任何一天',
+        anyDayHint: '若各小組自行決定聚會日，請選此項 — 出席將以週為單位統計。',
         noGroupsAdmin: '尚未有小組 — 請在管理模式中新增。',
         memberCount: n => `${n} 位成員`,
         recorded: '已記錄',
@@ -474,6 +480,16 @@
 
     const weekLabel = (s, lang) =>
       lang === 'zh' ? `${fmtDateShort(s, 'zh-TW')}當週` : `Week of ${fmtDateShort(s)}`;
+
+    // A meeting either lands on a fixed weekday or floats: small groups pick
+    // their own night, so what their sessions share is the week, not a weekday.
+    // A floating meeting carries dayOfWeek: null and is shown by week instead.
+    const floatsInWeek = (meeting) => !meeting || meeting.dayOfWeek == null;
+
+    // The session a meeting is currently "on" — its most recent occurrence for
+    // a fixed weekday, and today for a floating one, which could meet any day.
+    const currentSessionDate = (meeting) =>
+      floatsInWeek(meeting) ? todayStr() : lastMeetingDate(meeting.dayOfWeek);
 
     const fmtDate = (s, locale = 'en-US') =>
       new Date(s + 'T00:00:00').toLocaleDateString(locale, {
@@ -918,19 +934,27 @@
           <div className="grid gap-4 sm:grid-cols-2 mb-8">
             {data.meetings.map(m => {
               const groups   = data.groups.filter(g => g.meetingIds.includes(m.id));
-              const lastDate = lastMeetingDate(m.dayOfWeek);
-              const recorded = data.attendance.filter(a => a.meetingId === m.id && a.date === lastDate).length;
+              // A floating meeting has no weekday to anchor on, so the period
+              // it reports on is the whole week: every group's own night counts
+              // toward the same "Week of Aug 23" instead of a single date.
+              const floats   = floatsInWeek(m);
+              const period   = floats ? weekStart(today) : lastMeetingDate(m.dayOfWeek);
+              const recorded = data.attendance.filter(a => a.meetingId === m.id &&
+                (floats ? weekStart(a.date) === period : a.date === period)).length;
+              const periodLabel = floats ? weekLabel(period, lang) : fmtDateShort(period, t.locale);
               const isToday = m.dayOfWeek === dow;
               return (
                 <div key={m.id} onClick={() => navigate({ name:'meeting', meetingId:m.id })}
                   className={`bg-white rounded-2xl shadow-sm border-2 p-5 cursor-pointer hover:shadow-md transition-shadow ${isToday ? 'border-indigo-400' : 'border-gray-100'}`}>
                   {isToday && <span className="inline-block bg-indigo-100 text-indigo-700 text-xs font-semibold px-2 py-0.5 rounded-full mb-2">{t.today.toUpperCase()}</span>}
                   <h2 className="text-lg font-bold text-gray-800">{localizedName(m, lang)}</h2>
-                  <p className="text-sm text-gray-500 mb-3">{t.every} {t.days[m.dayOfWeek]} · {nextOcc(m.dayOfWeek)}</p>
+                  <p className="text-sm text-gray-500 mb-3">
+                    {floats ? `${t.anyDay} · ${periodLabel}` : `${t.every} ${t.days[m.dayOfWeek]} · ${nextOcc(m.dayOfWeek)}`}
+                  </p>
                   <div className="flex gap-4 text-sm text-gray-600">
                     <span className="flex items-center gap-1"><I.Users />{t.groupCount(groups.length)}</span>
                     <span className={`font-medium ${recorded > 0 ? 'text-green-600' : 'text-gray-400'}`}>
-                      {recorded > 0 ? t.sessionsRecorded(recorded, fmtDateShort(lastDate, t.locale)) : t.noRecordsFor(fmtDateShort(lastDate, t.locale))}
+                      {recorded > 0 ? t.sessionsRecorded(recorded, periodLabel) : t.noRecordsFor(periodLabel)}
                     </span>
                   </div>
                 </div>
@@ -970,15 +994,24 @@
       if (!meeting) return null;
       // The meeting's own most recent scheduled date, not literal today —
       // this meeting might not fall on today's weekday at all. Shown on every
-      // card, so "Recorded" can't be mistaken for a claim about today.
-      const lastDate = lastMeetingDate(meeting.dayOfWeek);
+      // card, so "Recorded" can't be mistaken for a claim about today. A
+      // floating meeting has no such date: its groups each pick a night, so
+      // the card reports on this week instead.
+      const floats   = floatsInWeek(meeting);
+      const lastDate = currentSessionDate(meeting);
+      const weekOf   = weekStart(lastDate);
 
       const focusGroups = groups.filter(g => focusGroupIds.includes(g.id));
       const otherGroups = groups.filter(g => !focusGroupIds.includes(g.id));
 
       const GroupCard = ({ g }) => {
         const members = groupMembers(data, g);
-        const rec = data.attendance.find(a => a.meetingId===view.meetingId && a.groupId===g.id && a.date===lastDate);
+        const rec = data.attendance.find(a => a.meetingId===view.meetingId && a.groupId===g.id &&
+          (floats ? weekStart(a.date) === weekOf : a.date === lastDate));
+        // Once the group's session is on the books, its real date beats the
+        // period label — "Aug 25" says more than "Week of Aug 23".
+        const whenLabel = rec ? fmtDateShort(rec.date, t.locale)
+          : floats ? weekLabel(weekOf, lang) : fmtDateShort(lastDate, t.locale);
         const presentCount = rec ? rec.records.filter(r => r.present).length : null;
         const pinned = focusGroupIds.includes(g.id);
         return (
@@ -1001,12 +1034,12 @@
                   <>
                     <span className="inline-block bg-green-100 text-green-700 text-xs font-semibold px-2 py-0.5 rounded-full">{t.recorded}</span>
                     <p className="text-xs text-gray-500 mt-1">{t.presentOf(presentCount, members.length)}</p>
-                    <p className="text-xs text-gray-400">{fmtDateShort(lastDate, t.locale)}</p>
+                    <p className="text-xs text-gray-400">{whenLabel}</p>
                   </>
                 ) : (
                   <>
                     <span className="inline-block bg-gray-100 text-gray-500 text-xs px-2 py-0.5 rounded-full">{t.noRecord}</span>
-                    <p className="text-xs text-gray-400 mt-1">{fmtDateShort(lastDate, t.locale)}</p>
+                    <p className="text-xs text-gray-400 mt-1">{whenLabel}</p>
                   </>
                 )}
               </div>
@@ -1026,7 +1059,9 @@
         <div className="max-w-3xl mx-auto px-4 py-6">
           <div className="mb-6">
             <h1 className="text-2xl font-bold text-gray-800">{localizedName(meeting, lang)}</h1>
-            <p className="text-gray-500 text-sm">{t.every} {t.days[meeting.dayOfWeek]}</p>
+            <p className="text-gray-500 text-sm">
+              {floats ? `${t.anyDay} · ${weekLabel(weekOf, lang)}` : `${t.every} ${t.days[meeting.dayOfWeek]}`}
+            </p>
           </div>
 
           {groups.length === 0 ? (
@@ -1069,8 +1104,10 @@
       const meeting = data.meetings.find(m => m.id === view.meetingId);
       const group   = data.groups.find(g => g.id === view.groupId);
 
-      const openingDate = () =>
-        view.date || (meeting ? lastMeetingDate(meeting.dayOfWeek) : todayStr());
+      // A fixed-weekday meeting opens on its last occurrence; a floating one
+      // could have met any day, so today is the best guess at the session
+      // being recorded. The date field stays editable either way.
+      const openingDate = () => view.date || currentSessionDate(meeting);
 
       const [date,     setDate]     = useState(openingDate);
       const [present,  setPresent]  = useState({});
@@ -2081,7 +2118,7 @@
       // ── Meeting form ──
       const [mForm,    setMForm]    = useState(null);
       const [mEditing, setMEditing] = useState(null);
-      const openEditMeeting = (m) => { setMEditing(m.id); setMForm({ name:{...m.name}, dayOfWeek:m.dayOfWeek }); };
+      const openEditMeeting = (m) => { setMEditing(m.id); setMForm({ name:{...m.name}, dayOfWeek:m.dayOfWeek ?? null }); };
       const saveMeeting = () => {
         if (!mForm.name.en.trim() && !mForm.name.zh.trim()) return alert(t.meetingNameRequired);
         run(async () => {
@@ -2259,7 +2296,9 @@
                       <div className="flex items-center justify-between">
                         <div>
                           <p className="font-semibold text-gray-800">{localizedName(m, lang)}</p>
-                          <p className="text-sm text-gray-500">{t.every} {t.days[m.dayOfWeek]} · {t.groupCount(grpCount)}</p>
+                          <p className="text-sm text-gray-500">
+                            {floatsInWeek(m) ? t.anyDay : `${t.every} ${t.days[m.dayOfWeek]}`} · {t.groupCount(grpCount)}
+                          </p>
                         </div>
                         <div className="flex gap-1">
                           <button onClick={() => openEditMeeting(m)} className="p-2 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg"><I.Edit /></button>
@@ -2626,10 +2665,16 @@
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">{t.dayOfWeekLabel}</label>
-                    <select value={mForm.dayOfWeek} onChange={e => setMForm(f=>({...f,dayOfWeek:parseInt(e.target.value)}))}
+                    {/* "" is the floating meeting — no weekday, tracked by week.
+                        It stores dayOfWeek: null, which every view reads back
+                        through floatsInWeek. */}
+                    <select value={mForm.dayOfWeek ?? ''}
+                      onChange={e => setMForm(f=>({...f, dayOfWeek: e.target.value === '' ? null : parseInt(e.target.value)}))}
                       className="border border-gray-300 rounded-lg px-3 py-2 w-full text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400">
+                      <option value="">{t.anyDayOption}</option>
                       {t.days.map((d,i) => <option key={i} value={i}>{d}</option>)}
                     </select>
+                    <p className="text-xs text-gray-400 mt-1">{t.anyDayHint}</p>
                   </div>
                 </div>
                 <div className="flex gap-2">

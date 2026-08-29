@@ -679,14 +679,23 @@ function normalizeBilingualName(name) {
 }
 
 // ─── Meetings ─────────────────────────────────────────────────────────────────
+// A meeting either falls on a fixed weekday or floats anywhere inside the week
+// — small groups pick their own night — in which case dayOfWeek is null and the
+// app reports the meeting by week instead of by date.
+function parseDayOfWeek(dayOfWeek) {
+  if (dayOfWeek == null || dayOfWeek === '') return null;
+  const day = Number(dayOfWeek);
+  if (!Number.isInteger(day) || day < 0 || day > 6) {
+    throw new HttpError(400, 'dayOfWeek must be null, or a whole number from 0 (Sunday) to 6 (Saturday)');
+  }
+  return day;
+}
+
 app.post('/api/meetings', requireAdmin, route(async (req, res) => {
   const { name, dayOfWeek } = req.body || {};
-  const day = Number(dayOfWeek);
+  const day = parseDayOfWeek(dayOfWeek);
   const bilingualName = normalizeBilingualName(name);
-  if (!bilingualName || dayOfWeek == null) throw new HttpError(400, 'name and dayOfWeek required');
-  if (!Number.isInteger(day) || day < 0 || day > 6) {
-    throw new HttpError(400, 'dayOfWeek must be a whole number from 0 (Sunday) to 6 (Saturday)');
-  }
+  if (!bilingualName) throw new HttpError(400, 'name required');
   const id = await commit(s => {
     const meeting = { id: uid(), name: bilingualName, dayOfWeek: day };
     s.meetings.push(meeting);
@@ -697,12 +706,9 @@ app.post('/api/meetings', requireAdmin, route(async (req, res) => {
 
 app.put('/api/meetings/:id', requireAdmin, route(async (req, res) => {
   const { name, dayOfWeek } = req.body || {};
-  const day = Number(dayOfWeek);
+  const day = parseDayOfWeek(dayOfWeek);
   const bilingualName = normalizeBilingualName(name);
-  if (!bilingualName || dayOfWeek == null) throw new HttpError(400, 'name and dayOfWeek required');
-  if (!Number.isInteger(day) || day < 0 || day > 6) {
-    throw new HttpError(400, 'dayOfWeek must be a whole number from 0 (Sunday) to 6 (Saturday)');
-  }
+  if (!bilingualName) throw new HttpError(400, 'name required');
   await commit(s => {
     if (!s.meetings.some(m => m.id === req.params.id)) throw new HttpError(404, 'Meeting not found');
     s.meetings = s.meetings.map(m =>
