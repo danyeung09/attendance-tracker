@@ -544,11 +544,24 @@
       return [g.name.en, g.name.zh].some(n => n && n.toLowerCase() === wanted);
     };
 
+    // Every roster reads like a directory: last name first, first name to break
+    // ties. Without this, people list in the order they happened to be added,
+    // which stops matching the printed lists once a group grows. localeCompare
+    // so accented and Chinese names order sensibly rather than by code point.
+    const byLastName = (a, b) =>
+      (a?.lastName || '').localeCompare(b?.lastName || '') ||
+      (a?.firstName || '').localeCompare(b?.firstName || '');
+
+    // Members of one group, in roster order. `filter` hands back a fresh array,
+    // so sorting it never disturbs data.people.
+    const groupMembers = (data, group) =>
+      group ? data.people.filter(p => group.memberIds.includes(p.id)).sort(byLastName) : [];
+
     // A person deleted by an admin is archived, not removed, so past attendance
     // still resolves to a real name and its totals stay correct. Archived people
     // belong to no group and must stay out of every roster, count and picker —
     // the one place they still appear is the history list.
-    const activePeople = (data) => data.people.filter(p => !p.archived);
+    const activePeople = (data) => data.people.filter(p => !p.archived).sort(byLastName);
 
     // A person may be in one group per meeting — a Sunday team and a Friday small
     // group is fine, two Friday groups is not. Mirrors the server's rule. A group
@@ -964,7 +977,7 @@
       const otherGroups = groups.filter(g => !focusGroupIds.includes(g.id));
 
       const GroupCard = ({ g }) => {
-        const members = data.people.filter(p => g.memberIds.includes(p.id));
+        const members = groupMembers(data, g);
         const rec = data.attendance.find(a => a.meetingId===view.meetingId && a.groupId===g.id && a.date===lastDate);
         const presentCount = rec ? rec.records.filter(r => r.present).length : null;
         const pinned = focusGroupIds.includes(g.id);
@@ -1066,7 +1079,7 @@
       const [rev,      setRev]      = useState(null);    // version this edit is based on
       const [conflict, setConflict] = useState(null);    // { rev, records } from a 409
 
-      const members = group ? data.people.filter(p => group.memberIds.includes(p.id)) : [];
+      const members = groupMembers(data, group);
 
       // Every past session for this group, newest first, so a super/admin can
       // jump straight to one and correct it here instead of going through
@@ -1566,10 +1579,11 @@
             if (!seenKeys.has(key)) { seenKeys.add(key); memberKeys.push({ groupId: rec.groupId, personId: r.personId }); }
           });
         });
+        const person = (personId) => data.people.find(x => x.id === personId);
         memberKeys.sort((a, b) => {
           const ga = localizedName(trendGroups.find(g => g.id === a.groupId), lang);
           const gb = localizedName(trendGroups.find(g => g.id === b.groupId), lang);
-          return ga !== gb ? ga.localeCompare(gb) : personName(a.personId).localeCompare(personName(b.personId));
+          return ga !== gb ? ga.localeCompare(gb) : byLastName(person(a.personId), person(b.personId));
         });
 
         // A week can hold more than one session for a member (several meetings
@@ -1714,16 +1728,17 @@
                             </button>
                             {expanded.has(rec.id) && (
                               <div className="flex flex-wrap gap-1 mt-2">
-                                {rec.records.map(r => {
-                                  const p = data.people.find(x => x.id === r.personId);
-                                  if (!p) return null;
-                                  return (
+                                {/* Copied before sorting — rec.records is app state. */}
+                                {[...rec.records]
+                                  .map(r => ({ r, p: data.people.find(x => x.id === r.personId) }))
+                                  .filter(x => x.p)
+                                  .sort((a, b) => byLastName(a.p, b.p))
+                                  .map(({ r, p }) => (
                                     <span key={r.personId} className={`text-xs px-2 py-0.5 rounded-full font-medium ${r.present ? 'bg-green-100 text-green-700' : 'bg-red-50 text-red-500'} ${p.archived ? 'italic opacity-70' : ''}`}
                                       title={p.archived ? t.archivedTip : undefined}>
                                       {p.firstName} {p.lastName}
                                     </span>
-                                  );
-                                })}
+                                  ))}
                               </div>
                             )}
                           </div>
@@ -2131,7 +2146,7 @@
                       ? <p className="text-gray-400 text-sm italic ml-1">{t.noGroupsYet}</p>
                       : <div className="space-y-3">
                           {groups.map(g => {
-                            const members = data.people.filter(p => g.memberIds.includes(p.id));
+                            const members = groupMembers(data, g);
                             return (
                               <div key={g.id} className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
                                 <div className="flex items-center justify-between mb-3">
