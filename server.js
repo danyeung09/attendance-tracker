@@ -239,10 +239,12 @@ const focusGroupIds = (u) => (u && Array.isArray(u.focusGroupIds)) ? u.focusGrou
 const trendGroupIds = (u) => (u && Array.isArray(u.trendGroupIds)) ? u.trendGroupIds : [];
 
 // Which half of a name leads every roster for this user — 'last' (the default,
-// how printed member lists read) or 'first'. Personal like the two above: it
-// reorders what they see and nothing else.
+// how printed member lists read) or 'first' — and which way it runs, A-Z or
+// Z-A. Personal like the two above: it reorders what they see and nothing else.
 const MEMBER_SORTS = ['last', 'first'];
+const MEMBER_SORT_DIRS = ['asc', 'desc'];
 const memberSort = (u) => (u && MEMBER_SORTS.includes(u.memberSort)) ? u.memberSort : 'last';
+const memberSortDir = (u) => (u && MEMBER_SORT_DIRS.includes(u.memberSortDir)) ? u.memberSortDir : 'asc';
 
 function validateCredentials(username, password) {
   const name = normaliseUsername(username);
@@ -312,7 +314,7 @@ function resolveSession(req) {
     const a = Buffer.from(String(payload.bg));
     const b = Buffer.from(adminFingerprint());
     if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return null;
-    return { role: 'admin', userId: null, username: 'break-glass admin', breakGlass: true, focusGroupIds: [], trendGroupIds: [], memberSort: 'last' };
+    return { role: 'admin', userId: null, username: 'break-glass admin', breakGlass: true, focusGroupIds: [], trendGroupIds: [], memberSort: 'last', memberSortDir: 'asc' };
   }
 
   if (typeof payload.uid !== 'string') return null;
@@ -326,6 +328,7 @@ function resolveSession(req) {
     focusGroupIds: focusGroupIds(user),
     trendGroupIds: trendGroupIds(user),
     memberSort:    memberSort(user),
+    memberSortDir: memberSortDir(user),
   };
 }
 
@@ -422,6 +425,7 @@ app.get('/api/session', (req, res) => {
     focusGroupIds: session ? session.focusGroupIds : [],
     trendGroupIds: session ? session.trendGroupIds : [],
     memberSort:    session ? session.memberSort : 'last',
+    memberSortDir: session ? session.memberSortDir : 'asc',
   });
 });
 
@@ -445,7 +449,7 @@ app.post('/api/login', route(async (req, res) => {
   res.json({
     role: user.role, username: user.displayName || user.username,
     focusGroupIds: focusGroupIds(user), trendGroupIds: trendGroupIds(user),
-    memberSort: memberSort(user),
+    memberSort: memberSort(user), memberSortDir: memberSortDir(user),
   });
 }));
 
@@ -473,7 +477,7 @@ app.post('/api/register', route(async (req, res) => {
   });
 
   setSessionCookie(req, res, issueUserToken(created));
-  res.json({ role: created.role, username: created.displayName, focusGroupIds: [], trendGroupIds: [], memberSort: 'last' });
+  res.json({ role: created.role, username: created.displayName, focusGroupIds: [], trendGroupIds: [], memberSort: 'last', memberSortDir: 'asc' });
 }));
 
 // Break-glass: signs in as an admin using ADMIN_PASSWORD with no account at all,
@@ -488,7 +492,7 @@ app.post('/api/login/break-glass', route(async (req, res) => {
   }
   loginAttempts.delete(ip);
   setSessionCookie(req, res, issueBreakGlassToken());
-  res.json({ role: 'admin', username: 'break-glass admin', breakGlass: true, focusGroupIds: [], trendGroupIds: [], memberSort: 'last' });
+  res.json({ role: 'admin', username: 'break-glass admin', breakGlass: true, focusGroupIds: [], trendGroupIds: [], memberSort: 'last', memberSortDir: 'asc' });
 }));
 
 app.post('/api/logout', (req, res) => {
@@ -676,22 +680,30 @@ app.patch('/api/me/trend-groups', requireSuper, route(async (req, res) => {
   res.json({ trendGroupIds: saved });
 }));
 
-// Which half of a name leads every roster for this user. Any signed-in account
-// may set it — it changes the order they read, never what they can see.
+// Which half of a name leads every roster for this user, and whether it runs
+// A-Z or Z-A. Any signed-in account may set it — it changes the order they
+// read, never what they can see. Either half may be sent on its own, so
+// flipping the direction doesn't have to restate which name leads.
 app.patch('/api/me/member-sort', requireViewer, route(async (req, res) => {
   if (req.session.breakGlass) {
     throw new HttpError(400, 'The break-glass admin has no account to save a preference against.');
   }
-  const { sort } = req.body || {};
-  if (!MEMBER_SORTS.includes(sort)) {
+  const { sort, dir } = req.body || {};
+  if (sort !== undefined && !MEMBER_SORTS.includes(sort)) {
     throw new HttpError(400, `sort must be one of: ${MEMBER_SORTS.join(', ')}`);
   }
+  if (dir !== undefined && !MEMBER_SORT_DIRS.includes(dir)) {
+    throw new HttpError(400, `dir must be one of: ${MEMBER_SORT_DIRS.join(', ')}`);
+  }
+  let saved;
   await commit(s => {
     const user = findUserId(s, req.session.userId);
     if (!user) throw new HttpError(404, 'User not found');
-    user.memberSort = sort;
+    if (sort !== undefined) user.memberSort = sort;
+    if (dir !== undefined) user.memberSortDir = dir;
+    saved = { memberSort: memberSort(user), memberSortDir: memberSortDir(user) };
   });
-  res.json({ memberSort: sort });
+  res.json(saved);
 }));
 
 // A meeting or group name is bilingual — { en, zh } — so it displays correctly

@@ -41,6 +41,8 @@
         sortBy: 'Sort by',
         sortLastName: 'Last name',
         sortFirstName: 'First name',
+        sortAsc: 'A–Z',
+        sortDesc: 'Z–A',
         noGroupsAdmin: 'No groups yet — add them in Admin mode.',
         memberCount: n => `${n} member${n!==1?'s':''}`,
         recorded: 'Recorded',
@@ -231,6 +233,8 @@
         sortBy: '排序',
         sortLastName: '姓氏',
         sortFirstName: '名字',
+        sortAsc: '升序',
+        sortDesc: '降序',
         noGroupsAdmin: '尚未有小組 — 請在管理模式中新增。',
         memberCount: n => `${n} 位成員`,
         recorded: '已記錄',
@@ -567,10 +571,11 @@
     };
 
     // Every roster reads like a directory rather than listing people in the
-    // order they happened to be added. Which half of the name leads is the
-    // reader's own preference, saved against their account, so the order
-    // follows them from the attendance sheet to Manage and back. localeCompare
-    // so accented and Chinese names order sensibly rather than by code point.
+    // order they happened to be added. Which half of the name leads, and
+    // whether the list runs A-Z or Z-A, is the reader's own preference saved
+    // against their account, so the order follows them from the attendance
+    // sheet to Manage and back. localeCompare so accented and Chinese names
+    // order sensibly rather than by code point.
     const byLastName = (a, b) =>
       (a?.lastName || '').localeCompare(b?.lastName || '') ||
       (a?.firstName || '').localeCompare(b?.firstName || '');
@@ -579,7 +584,12 @@
       (a?.firstName || '').localeCompare(b?.firstName || '') ||
       (a?.lastName || '').localeCompare(b?.lastName || '');
 
-    const nameComparator = (sort) => sort === 'first' ? byFirstName : byLastName;
+    // `sort` is the whole preference — { key, dir } — so every roster call site
+    // passes one value and picks up the direction for free.
+    const nameComparator = (sort) => {
+      const compare = sort?.key === 'first' ? byFirstName : byLastName;
+      return sort?.dir === 'desc' ? (a, b) => compare(b, a) : compare;
+    };
 
     // Members of one group, in roster order. `filter` hands back a fresh array,
     // so sorting it never disturbs data.people.
@@ -621,9 +631,10 @@
       // Which groups this super/admin has picked for their own "Overall
       // Attendance Trend" chart in History — also personal, not shared.
       const [trendGroupIds, setTrendGroupIds] = useState([]);
-      // Which half of a name leads every roster for this account: 'last' or
-      // 'first'. Personal too — it reorders what they read, nothing more.
-      const [memberSort, setMemberSortState] = useState('last');
+      // How every roster reads for this account: which half of the name leads
+      // ('last' or 'first') and which way it runs ('asc' or 'desc'). Personal
+      // too — it reorders what they read, nothing more.
+      const [memberSort, setMemberSortState] = useState({ key: 'last', dir: 'asc' });
       const [authState,  setAuthState]  = useState('checking');  // 'checking' | 'anon' | 'ok'
       const [authNotice, setAuthNotice] = useState(null);
 
@@ -678,7 +689,7 @@
               setBreakGlass(!!s.breakGlass);
               setFocusGroupIds(s.focusGroupIds || []);
               setTrendGroupIds(s.trendGroupIds || []);
-              setMemberSortState(s.memberSort || 'last');
+              setMemberSortState({ key: s.memberSort || 'last', dir: s.memberSortDir || 'asc' });
               setAuthState('ok');
               await refresh();
             } else {
@@ -704,7 +715,7 @@
         setBreakGlass(!!session.breakGlass);
         setFocusGroupIds(session.focusGroupIds || []);
         setTrendGroupIds(session.trendGroupIds || []);
-        setMemberSortState(session.memberSort || 'last');
+        setMemberSortState({ key: session.memberSort || 'last', dir: session.memberSortDir || 'asc' });
         setAuthState('ok');
         setAuthNotice(null);
         setLoading(true);
@@ -757,15 +768,17 @@
         }
       }, [trendGroupIds]);
 
-      // Same optimistic-then-persist pattern as the pickers above. The
-      // break-glass admin has no account to save against, so their choice
-      // holds for the session only rather than bouncing back on a failed save.
-      const setMemberSort = useCallback(async (sort) => {
+      // Same optimistic-then-persist pattern as the pickers above, taking a
+      // partial change so picking a name half and flipping the direction each
+      // send only what they touched. The break-glass admin has no account to
+      // save against, so their choice holds for the session only rather than
+      // bouncing back on a failed save.
+      const setMemberSort = useCallback(async (change) => {
         const previous = memberSort;
-        setMemberSortState(sort);
+        setMemberSortState({ ...previous, ...change });
         if (breakGlass) return;
         try {
-          await api.patch('/api/me/member-sort', { sort });
+          await api.patch('/api/me/member-sort', { sort: change.key, dir: change.dir });
         } catch {
           setMemberSortState(previous);
         }
@@ -1464,20 +1477,31 @@
     // ─── Member sort toggle ───────────────────────────────────────────────────
     // One control, three places — the attendance sheet, Manage > Groups and the
     // People list all drive the same saved preference, so a roster never
-    // reorders on you just because you walked to another screen.
-    const MemberSortToggle = ({ value, onChange, t }) => (
-      <div className="flex items-center gap-1 shrink-0">
-        <span className="text-xs text-gray-400 mr-0.5">{t.sortBy}</span>
-        {[['last', t.sortLastName], ['first', t.sortFirstName]].map(([key, label]) => (
-          <button key={key} type="button" onClick={() => onChange(key)}
-            className={`text-xs font-medium px-2 py-1 rounded-lg border transition ${value === key
-              ? 'border-indigo-400 bg-indigo-50 text-indigo-700'
-              : 'border-gray-200 text-gray-500 hover:border-gray-300 hover:text-gray-700'}`}>
-            {label}
+    // reorders on you just because you walked to another screen. Which half of
+    // the name leads picks between two buttons; the direction is a single
+    // button showing where the list runs now, since A-Z and Z-A are the only
+    // two ways it can go.
+    const MemberSortToggle = ({ value, onChange, t }) => {
+      const flipped = value.dir === 'desc';
+      const pill = (active) => `text-xs font-medium px-2 py-1 rounded-lg border transition ${active
+        ? 'border-indigo-400 bg-indigo-50 text-indigo-700'
+        : 'border-gray-200 text-gray-500 hover:border-gray-300 hover:text-gray-700'}`;
+
+      return (
+        <div className="flex items-center gap-1 shrink-0">
+          <span className="text-xs text-gray-400 mr-0.5">{t.sortBy}</span>
+          {[['last', t.sortLastName], ['first', t.sortFirstName]].map(([key, label]) => (
+            <button key={key} type="button" onClick={() => onChange({ key })} className={pill(value.key === key)}>
+              {label}
+            </button>
+          ))}
+          <button type="button" onClick={() => onChange({ dir: flipped ? 'asc' : 'desc' })}
+            title={flipped ? t.sortAsc : t.sortDesc} className={`${pill(flipped)} ml-1`}>
+            {flipped ? t.sortDesc : t.sortAsc}
           </button>
-        ))}
-      </div>
-    );
+        </div>
+      );
+    };
 
     // ─── Multi-select dropdown ────────────────────────────────────────────────
     // A checkbox list behind a button, for picking several groups at once
