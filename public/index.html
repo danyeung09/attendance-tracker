@@ -462,6 +462,19 @@
       return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
     };
 
+    // Small-group sessions float across the week — one group may meet Tuesday
+    // and another Friday — so plotting raw dates splits a single week's
+    // turnout into several tiny points. Trends bucket sessions by the week
+    // they fall in instead, keyed by its Sunday (the Lord's Day opens the week).
+    const weekStart = (s) => {
+      const d = new Date(s + 'T00:00:00');
+      d.setDate(d.getDate() - d.getDay());
+      return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+    };
+
+    const weekLabel = (s, lang) =>
+      lang === 'zh' ? `${fmtDateShort(s, 'zh-TW')}當週` : `Week of ${fmtDateShort(s)}`;
+
     const fmtDate = (s, locale = 'en-US') =>
       new Date(s + 'T00:00:00').toLocaleDateString(locale, {
         weekday:'long', year:'numeric', month:'long', day:'numeric'
@@ -1283,23 +1296,24 @@
       const chartRef  = useRef(null);
 
       // One combined line: the total present across every group passed in,
-      // per date. This is the shared "Overall Attendance Trend" — per-group
-      // breakdowns live in the separate By Group section, not here. When a
-      // specific meeting is picked (not "all"), the trend narrows to that
-      // meeting's own records so it matches what the meeting filter implies.
+      // per week. Groups hold the same meeting on different weekdays, so a
+      // week — not a date — is the unit that lines their sessions up into a
+      // single turnout figure. This is the shared "Overall Attendance Trend";
+      // per-group breakdowns live in the separate By Group section, not here.
+      // When a specific meeting is picked (not "all"), the trend narrows to
+      // that meeting's own records so it matches what the meeting filter implies.
       const { labels, datasets } = useMemo(() => {
         const relevant = data.attendance.filter(a =>
           groups.some(g => g.id === a.groupId) && (!meetingId || meetingId === 'all' || a.meetingId === meetingId));
-        const dates = [...new Set(relevant.map(a => a.date))].sort();
-        if (!dates.length) return { labels: [], datasets: [] };
+        const weeks = [...new Set(relevant.map(a => weekStart(a.date)))].sort();
+        if (!weeks.length) return { labels: [], datasets: [] };
 
-        const totals = dates.map(date => {
-          const day = relevant.filter(a => a.date === date);
-          return day.reduce((sum, r) => sum + r.records.filter(x => x.present).length, 0);
-        });
+        const totals = weeks.map(week => relevant
+          .filter(a => weekStart(a.date) === week)
+          .reduce((sum, r) => sum + r.records.filter(x => x.present).length, 0));
 
         return {
-          labels: dates.map(shortDate),
+          labels: weeks.map(w => weekLabel(w, lang)),
           datasets: [{
             label: groups.map(g => localizedName(g, lang)).join(', '),
             data: totals,
@@ -1514,24 +1528,29 @@
       // same as the rest of the History page.
       const trendGroups = data.groups.filter(g => trendGroupIds.includes(g.id));
 
-      // One column per trend group plus a combined Total, one row per date —
+      // One column per trend group plus a combined Total, one row per week —
       // the same figures the chart above plots, just laid out for a spreadsheet.
-      // Followed by a per-member detail table (group + name, not shown on the
-      // chart itself): one row per group+member, one column per date, so same
-      // -date attendance lines up side by side instead of repeating rows.
+      // Weeks, not dates, because groups meet on different weekdays (see
+      // weekStart). Followed by a per-member detail table (group + name, not
+      // shown on the chart itself): one row per group+member, one column per
+      // week, so the same week's attendance lines up side by side instead of
+      // repeating rows.
       const exportTrendCsv = () => {
         const relevant = data.attendance.filter(a =>
           trendGroups.some(g => g.id === a.groupId) && (activeFilter === 'all' || a.meetingId === activeFilter));
-        const dates = [...new Set(relevant.map(a => a.date))].sort();
-        const header = ['Date', ...trendGroups.map(g => localizedName(g, lang)), 'Total'];
-        const rows = dates.map(date => {
-          const day = relevant.filter(a => a.date === date);
+        const weeks = [...new Set(relevant.map(a => weekStart(a.date)))].sort();
+        const inWeek = (week) => relevant.filter(a => weekStart(a.date) === week);
+        const header = ['Week of', ...trendGroups.map(g => localizedName(g, lang)), 'Total'];
+        const rows = weeks.map(week => {
+          const wk = inWeek(week);
           const perGroup = trendGroups.map(g => {
-            const rec = day.find(a => a.groupId === g.id);
-            return rec ? rec.records.filter(x => x.present).length : '';
+            const recs = wk.filter(a => a.groupId === g.id);
+            return recs.length
+              ? recs.reduce((sum, r) => sum + r.records.filter(x => x.present).length, 0)
+              : '';
           });
-          const total = day.reduce((sum, r) => sum + r.records.filter(x => x.present).length, 0);
-          return [date, ...perGroup, total];
+          const total = wk.reduce((sum, r) => sum + r.records.filter(x => x.present).length, 0);
+          return [week, ...perGroup, total];
         });
 
         const personName = (personId) => {
@@ -1553,15 +1572,21 @@
           return ga !== gb ? ga.localeCompare(gb) : personName(a.personId).localeCompare(personName(b.personId));
         });
 
-        const detailHeader = ['Group', 'Name', ...dates];
+        // A week can hold more than one session for a member (several meetings
+        // under "All Meetings"), so the cell answers "did they turn up at all
+        // that week?" — Yes beats No, and blank means nothing was recorded.
+        const detailHeader = ['Group', 'Name', ...weeks];
         const detailRows = memberKeys.map(({ groupId, personId }) => {
           const group = trendGroups.find(g => g.id === groupId);
-          const perDate = dates.map(date => {
-            const rec = relevant.find(a => a.date === date && a.groupId === groupId);
-            const r = rec && rec.records.find(x => x.personId === personId);
-            return r ? (r.present ? 'Yes' : 'No') : '';
+          const perWeek = weeks.map(week => {
+            const marks = inWeek(week)
+              .filter(a => a.groupId === groupId)
+              .map(a => a.records.find(x => x.personId === personId))
+              .filter(Boolean);
+            if (!marks.length) return '';
+            return marks.some(r => r.present) ? 'Yes' : 'No';
           });
-          return [group ? localizedName(group, lang) : '', personName(personId), ...perDate];
+          return [group ? localizedName(group, lang) : '', personName(personId), ...perWeek];
         });
 
         downloadCSV(`overall-attendance-trend-${todayStr()}.csv`,
