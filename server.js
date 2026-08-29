@@ -238,6 +238,12 @@ const focusGroupIds = (u) => (u && Array.isArray(u.focusGroupIds)) ? u.focusGrou
 // restricts what they can see or record.
 const trendGroupIds = (u) => (u && Array.isArray(u.trendGroupIds)) ? u.trendGroupIds : [];
 
+// Which half of a name leads every roster for this user — 'last' (the default,
+// how printed member lists read) or 'first'. Personal like the two above: it
+// reorders what they see and nothing else.
+const MEMBER_SORTS = ['last', 'first'];
+const memberSort = (u) => (u && MEMBER_SORTS.includes(u.memberSort)) ? u.memberSort : 'last';
+
 function validateCredentials(username, password) {
   const name = normaliseUsername(username);
   if (!/^[a-z0-9._-]{3,32}$/.test(name)) {
@@ -306,7 +312,7 @@ function resolveSession(req) {
     const a = Buffer.from(String(payload.bg));
     const b = Buffer.from(adminFingerprint());
     if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return null;
-    return { role: 'admin', userId: null, username: 'break-glass admin', breakGlass: true, focusGroupIds: [], trendGroupIds: [] };
+    return { role: 'admin', userId: null, username: 'break-glass admin', breakGlass: true, focusGroupIds: [], trendGroupIds: [], memberSort: 'last' };
   }
 
   if (typeof payload.uid !== 'string') return null;
@@ -319,6 +325,7 @@ function resolveSession(req) {
     username: user.displayName || user.username, breakGlass: false,
     focusGroupIds: focusGroupIds(user),
     trendGroupIds: trendGroupIds(user),
+    memberSort:    memberSort(user),
   };
 }
 
@@ -414,6 +421,7 @@ app.get('/api/session', (req, res) => {
     breakGlass:    session ? session.breakGlass : false,
     focusGroupIds: session ? session.focusGroupIds : [],
     trendGroupIds: session ? session.trendGroupIds : [],
+    memberSort:    session ? session.memberSort : 'last',
   });
 });
 
@@ -437,6 +445,7 @@ app.post('/api/login', route(async (req, res) => {
   res.json({
     role: user.role, username: user.displayName || user.username,
     focusGroupIds: focusGroupIds(user), trendGroupIds: trendGroupIds(user),
+    memberSort: memberSort(user),
   });
 }));
 
@@ -464,7 +473,7 @@ app.post('/api/register', route(async (req, res) => {
   });
 
   setSessionCookie(req, res, issueUserToken(created));
-  res.json({ role: created.role, username: created.displayName, focusGroupIds: [], trendGroupIds: [] });
+  res.json({ role: created.role, username: created.displayName, focusGroupIds: [], trendGroupIds: [], memberSort: 'last' });
 }));
 
 // Break-glass: signs in as an admin using ADMIN_PASSWORD with no account at all,
@@ -479,7 +488,7 @@ app.post('/api/login/break-glass', route(async (req, res) => {
   }
   loginAttempts.delete(ip);
   setSessionCookie(req, res, issueBreakGlassToken());
-  res.json({ role: 'admin', username: 'break-glass admin', breakGlass: true, focusGroupIds: [], trendGroupIds: [] });
+  res.json({ role: 'admin', username: 'break-glass admin', breakGlass: true, focusGroupIds: [], trendGroupIds: [], memberSort: 'last' });
 }));
 
 app.post('/api/logout', (req, res) => {
@@ -665,6 +674,24 @@ app.patch('/api/me/trend-groups', requireSuper, route(async (req, res) => {
     return user.trendGroupIds;
   });
   res.json({ trendGroupIds: saved });
+}));
+
+// Which half of a name leads every roster for this user. Any signed-in account
+// may set it — it changes the order they read, never what they can see.
+app.patch('/api/me/member-sort', requireViewer, route(async (req, res) => {
+  if (req.session.breakGlass) {
+    throw new HttpError(400, 'The break-glass admin has no account to save a preference against.');
+  }
+  const { sort } = req.body || {};
+  if (!MEMBER_SORTS.includes(sort)) {
+    throw new HttpError(400, `sort must be one of: ${MEMBER_SORTS.join(', ')}`);
+  }
+  await commit(s => {
+    const user = findUserId(s, req.session.userId);
+    if (!user) throw new HttpError(404, 'User not found');
+    user.memberSort = sort;
+  });
+  res.json({ memberSort: sort });
 }));
 
 // A meeting or group name is bilingual — { en, zh } — so it displays correctly

@@ -38,6 +38,9 @@
         anyDay: 'Any day',
         anyDayOption: 'Any day of the week',
         anyDayHint: 'Pick this when each group chooses its own night — attendance is then tracked by week.',
+        sortBy: 'Sort by',
+        sortLastName: 'Last name',
+        sortFirstName: 'First name',
         noGroupsAdmin: 'No groups yet — add them in Admin mode.',
         memberCount: n => `${n} member${n!==1?'s':''}`,
         recorded: 'Recorded',
@@ -225,6 +228,9 @@
         anyDay: '任何一天',
         anyDayOption: '一週內任何一天',
         anyDayHint: '若各小組自行決定聚會日，請選此項 — 出席將以週為單位統計。',
+        sortBy: '排序',
+        sortLastName: '姓氏',
+        sortFirstName: '名字',
         noGroupsAdmin: '尚未有小組 — 請在管理模式中新增。',
         memberCount: n => `${n} 位成員`,
         recorded: '已記錄',
@@ -560,24 +566,31 @@
       return [g.name.en, g.name.zh].some(n => n && n.toLowerCase() === wanted);
     };
 
-    // Every roster reads like a directory: last name first, first name to break
-    // ties. Without this, people list in the order they happened to be added,
-    // which stops matching the printed lists once a group grows. localeCompare
+    // Every roster reads like a directory rather than listing people in the
+    // order they happened to be added. Which half of the name leads is the
+    // reader's own preference, saved against their account, so the order
+    // follows them from the attendance sheet to Manage and back. localeCompare
     // so accented and Chinese names order sensibly rather than by code point.
     const byLastName = (a, b) =>
       (a?.lastName || '').localeCompare(b?.lastName || '') ||
       (a?.firstName || '').localeCompare(b?.firstName || '');
 
+    const byFirstName = (a, b) =>
+      (a?.firstName || '').localeCompare(b?.firstName || '') ||
+      (a?.lastName || '').localeCompare(b?.lastName || '');
+
+    const nameComparator = (sort) => sort === 'first' ? byFirstName : byLastName;
+
     // Members of one group, in roster order. `filter` hands back a fresh array,
     // so sorting it never disturbs data.people.
-    const groupMembers = (data, group) =>
-      group ? data.people.filter(p => group.memberIds.includes(p.id)).sort(byLastName) : [];
+    const groupMembers = (data, group, sort) =>
+      group ? data.people.filter(p => group.memberIds.includes(p.id)).sort(nameComparator(sort)) : [];
 
     // A person deleted by an admin is archived, not removed, so past attendance
     // still resolves to a real name and its totals stay correct. Archived people
     // belong to no group and must stay out of every roster, count and picker —
     // the one place they still appear is the history list.
-    const activePeople = (data) => data.people.filter(p => !p.archived).sort(byLastName);
+    const activePeople = (data, sort) => data.people.filter(p => !p.archived).sort(nameComparator(sort));
 
     // A person may be in one group per meeting — a Sunday team and a Friday small
     // group is fine, two Friday groups is not. Mirrors the server's rule. A group
@@ -608,6 +621,9 @@
       // Which groups this super/admin has picked for their own "Overall
       // Attendance Trend" chart in History — also personal, not shared.
       const [trendGroupIds, setTrendGroupIds] = useState([]);
+      // Which half of a name leads every roster for this account: 'last' or
+      // 'first'. Personal too — it reorders what they read, nothing more.
+      const [memberSort, setMemberSortState] = useState('last');
       const [authState,  setAuthState]  = useState('checking');  // 'checking' | 'anon' | 'ok'
       const [authNotice, setAuthNotice] = useState(null);
 
@@ -635,6 +651,7 @@
         setBreakGlass(false);
         setFocusGroupIds([]);
         setTrendGroupIds([]);
+        setMemberSortState('last');
         setAuthState('anon');
         setAuthNotice(notice || null);
         setData(EMPTY);
@@ -661,6 +678,7 @@
               setBreakGlass(!!s.breakGlass);
               setFocusGroupIds(s.focusGroupIds || []);
               setTrendGroupIds(s.trendGroupIds || []);
+              setMemberSortState(s.memberSort || 'last');
               setAuthState('ok');
               await refresh();
             } else {
@@ -686,6 +704,7 @@
         setBreakGlass(!!session.breakGlass);
         setFocusGroupIds(session.focusGroupIds || []);
         setTrendGroupIds(session.trendGroupIds || []);
+        setMemberSortState(session.memberSort || 'last');
         setAuthState('ok');
         setAuthNotice(null);
         setLoading(true);
@@ -738,6 +757,20 @@
         }
       }, [trendGroupIds]);
 
+      // Same optimistic-then-persist pattern as the pickers above. The
+      // break-glass admin has no account to save against, so their choice
+      // holds for the session only rather than bouncing back on a failed save.
+      const setMemberSort = useCallback(async (sort) => {
+        const previous = memberSort;
+        setMemberSortState(sort);
+        if (breakGlass) return;
+        try {
+          await api.patch('/api/me/member-sort', { sort });
+        } catch {
+          setMemberSortState(previous);
+        }
+      }, [memberSort, breakGlass]);
+
       const navigate = useCallback((newView) => {
         setHistory(h => [...h, view]);
         setView(newView);
@@ -761,6 +794,7 @@
           signIn, register, signInBreakGlass, signOut,
           focusGroupIds, toggleFocusGroup,
           trendGroupIds, toggleTrendGroup,
+          memberSort, setMemberSort,
         }}>
           {children}
         </Ctx.Provider>
@@ -985,7 +1019,7 @@
     // collapses under "Others" until expanded. With nothing pinned yet, every
     // group just lists normally, unchanged from before this existed.
     const MeetingView = () => {
-      const { data, view, navigate, loading, t, lang, focusGroupIds, toggleFocusGroup } = useApp();
+      const { data, view, navigate, loading, t, lang, focusGroupIds, toggleFocusGroup, memberSort } = useApp();
       const [showOthers, setShowOthers] = useState(false);
       if (loading) return <Spinner />;
 
@@ -1005,7 +1039,7 @@
       const otherGroups = groups.filter(g => !focusGroupIds.includes(g.id));
 
       const GroupCard = ({ g }) => {
-        const members = groupMembers(data, g);
+        const members = groupMembers(data, g, memberSort);
         const rec = data.attendance.find(a => a.meetingId===view.meetingId && a.groupId===g.id &&
           (floats ? weekStart(a.date) === weekOf : a.date === lastDate));
         // Once the group's session is on the books, its real date beats the
@@ -1099,7 +1133,7 @@
 
     // ─── Attendance Taking ────────────────────────────────────────────────────
     const AttendanceView = () => {
-      const { data, refresh, view, loading, t, lang, canManage } = useApp();
+      const { data, refresh, view, loading, t, lang, canManage, memberSort, setMemberSort } = useApp();
 
       const meeting = data.meetings.find(m => m.id === view.meetingId);
       const group   = data.groups.find(g => g.id === view.groupId);
@@ -1116,7 +1150,7 @@
       const [rev,      setRev]      = useState(null);    // version this edit is based on
       const [conflict, setConflict] = useState(null);    // { rev, records } from a 409
 
-      const members = groupMembers(data, group);
+      const members = groupMembers(data, group, memberSort);
 
       // Every past session for this group, newest first, so a super/admin can
       // jump straight to one and correct it here instead of going through
@@ -1264,14 +1298,17 @@
           )}
 
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 mb-4">
-            <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center justify-between gap-2 flex-wrap mb-3">
               <h2 className="font-semibold text-gray-700">{t.presentCount(presentCount, members.length)}</h2>
-              {canManage && (
-                <div className="flex gap-2">
-                  <button onClick={() => markAll(true)}  className="text-xs bg-green-100 text-green-700 px-2.5 py-1 rounded-lg hover:bg-green-200 font-medium">{t.allPresent}</button>
-                  <button onClick={() => markAll(false)} className="text-xs bg-red-100 text-red-700 px-2.5 py-1 rounded-lg hover:bg-red-200 font-medium">{t.allAbsent}</button>
-                </div>
-              )}
+              <div className="flex items-center gap-3 flex-wrap">
+                <MemberSortToggle value={memberSort} onChange={setMemberSort} t={t} />
+                {canManage && (
+                  <div className="flex gap-2">
+                    <button onClick={() => markAll(true)}  className="text-xs bg-green-100 text-green-700 px-2.5 py-1 rounded-lg hover:bg-green-200 font-medium">{t.allPresent}</button>
+                    <button onClick={() => markAll(false)} className="text-xs bg-red-100 text-red-700 px-2.5 py-1 rounded-lg hover:bg-red-200 font-medium">{t.allAbsent}</button>
+                  </div>
+                )}
+              </div>
             </div>
 
             <div className="space-y-2">
@@ -1424,6 +1461,24 @@
       );
     };
 
+    // ─── Member sort toggle ───────────────────────────────────────────────────
+    // One control, three places — the attendance sheet, Manage > Groups and the
+    // People list all drive the same saved preference, so a roster never
+    // reorders on you just because you walked to another screen.
+    const MemberSortToggle = ({ value, onChange, t }) => (
+      <div className="flex items-center gap-1 shrink-0">
+        <span className="text-xs text-gray-400 mr-0.5">{t.sortBy}</span>
+        {[['last', t.sortLastName], ['first', t.sortFirstName]].map(([key, label]) => (
+          <button key={key} type="button" onClick={() => onChange(key)}
+            className={`text-xs font-medium px-2 py-1 rounded-lg border transition ${value === key
+              ? 'border-indigo-400 bg-indigo-50 text-indigo-700'
+              : 'border-gray-200 text-gray-500 hover:border-gray-300 hover:text-gray-700'}`}>
+            {label}
+          </button>
+        ))}
+      </div>
+    );
+
     // ─── Multi-select dropdown ────────────────────────────────────────────────
     // A checkbox list behind a button, for picking several groups at once
     // instead of a native <select multiple> (which needs ctrl/cmd-click and
@@ -1523,7 +1578,7 @@
 
     // ─── History View ─────────────────────────────────────────────────────────
     const HistoryView = () => {
-      const { data, loading, t, lang, canManage, refresh, trendGroupIds, toggleTrendGroup, breakGlass } = useApp();
+      const { data, loading, t, lang, canManage, refresh, trendGroupIds, toggleTrendGroup, breakGlass, memberSort } = useApp();
       const [filter, setFilter] = useState(null);   // null = default to Small Group Meeting until user picks
       const [expanded, setExpanded] = useState(() => new Set());
       const [dateOverrides, setDateOverrides] = useState(() => new Set());
@@ -1620,7 +1675,7 @@
         memberKeys.sort((a, b) => {
           const ga = localizedName(trendGroups.find(g => g.id === a.groupId), lang);
           const gb = localizedName(trendGroups.find(g => g.id === b.groupId), lang);
-          return ga !== gb ? ga.localeCompare(gb) : byLastName(person(a.personId), person(b.personId));
+          return ga !== gb ? ga.localeCompare(gb) : nameComparator(memberSort)(person(a.personId), person(b.personId));
         });
 
         // A week can hold more than one session for a member (several meetings
@@ -1769,7 +1824,7 @@
                                 {[...rec.records]
                                   .map(r => ({ r, p: data.people.find(x => x.id === r.personId) }))
                                   .filter(x => x.p)
-                                  .sort((a, b) => byLastName(a.p, b.p))
+                                  .sort((a, b) => nameComparator(memberSort)(a.p, b.p))
                                   .map(({ r, p }) => (
                                     <span key={r.personId} className={`text-xs px-2 py-0.5 rounded-full font-medium ${r.present ? 'bg-green-100 text-green-700' : 'bg-red-50 text-red-500'} ${p.archived ? 'italic opacity-70' : ''}`}
                                       title={p.archived ? t.archivedTip : undefined}>
@@ -1949,7 +2004,7 @@
     const TAB_IDS = ['groups', 'people', 'meetings', 'users'];
 
     const AdminView = () => {
-      const { data, refresh, isAdmin, canManage, goBack, goHome, loading, t, lang } = useApp();
+      const { data, refresh, isAdmin, canManage, goBack, goHome, loading, t, lang, memberSort, setMemberSort } = useApp();
       const [tab,  setTab]  = useState('groups');
       const [busy, setBusy] = useState(false);
 
@@ -2169,7 +2224,8 @@
           {/* ── Groups ── */}
           {activeTab === 'groups' && (
             <div>
-              <div className="flex justify-end mb-3">
+              <div className="flex items-center justify-between gap-2 flex-wrap mb-3">
+                <MemberSortToggle value={memberSort} onChange={setMemberSort} t={t} />
                 <button onClick={openAddGroup} className="flex items-center gap-1.5 bg-indigo-600 text-white px-3 py-2 rounded-lg hover:bg-indigo-700 text-sm font-semibold">
                   <I.Plus /> {t.newGroup}
                 </button>
@@ -2183,7 +2239,7 @@
                       ? <p className="text-gray-400 text-sm italic ml-1">{t.noGroupsYet}</p>
                       : <div className="space-y-3">
                           {groups.map(g => {
-                            const members = groupMembers(data, g);
+                            const members = groupMembers(data, g, memberSort);
                             return (
                               <div key={g.id} className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
                                 <div className="flex items-center justify-between mb-3">
@@ -2238,7 +2294,9 @@
                   <button onClick={() => setCsvResult(null)} className="text-green-500 hover:text-green-700 text-lg leading-none">&times;</button>
                 </div>
               )}
-              <div className="flex justify-end gap-2 mb-3">
+              <div className="flex items-center justify-between gap-2 flex-wrap mb-3">
+                <MemberSortToggle value={memberSort} onChange={setMemberSort} t={t} />
+                <div className="flex gap-2">
                 <input ref={importFileRef} type="file" accept=".csv,text/csv" className="hidden" onChange={handleCSVFile} />
                 <button onClick={() => importFileRef.current.click()}
                   className="flex items-center gap-1.5 bg-white border border-gray-300 text-gray-700 px-3 py-2 rounded-lg hover:bg-gray-50 text-sm font-semibold">
@@ -2250,11 +2308,12 @@
                 <button onClick={openAddPerson} className="flex items-center gap-1.5 bg-indigo-600 text-white px-3 py-2 rounded-lg hover:bg-indigo-700 text-sm font-semibold">
                   <I.Plus /> {t.newPerson}
                 </button>
+                </div>
               </div>
-              {activePeople(data).length === 0
+              {activePeople(data, memberSort).length === 0
                 ? <p className="text-gray-400 text-sm italic">{t.noPeople}</p>
                 : <div className="space-y-2">
-                    {activePeople(data).map(p => {
+                    {activePeople(data, memberSort).map(p => {
                       const inGroups = data.groups.filter(g => g.memberIds.includes(p.id)).length;
                       return (
                         <div key={p.id} className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
@@ -2518,7 +2577,7 @@
             // Anyone not already committed to a group within one of *this*
             // group's meetings is eligible, even if they're in a group for
             // a meeting this group isn't assigned to.
-            const available = activePeople(data).filter(p => !groupClash(data, p.id, g.meetingIds, g.id));
+            const available = activePeople(data, memberSort).filter(p => !groupClash(data, p.id, g.meetingIds, g.id));
             return (
               <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
                 <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-sm max-h-[90vh] flex flex-col">
@@ -2591,10 +2650,10 @@
                     <label className="block text-sm font-medium text-gray-700 mb-1">
                       {t.membersLabel} <span className="text-gray-400 font-normal">{t.selectedCount(gForm.memberIds.length)}</span>
                     </label>
-                    {activePeople(data).length === 0
+                    {activePeople(data, memberSort).length === 0
                       ? <p className="text-gray-400 text-sm italic">{t.addPeopleFirst}</p>
                       : <div className="border border-gray-200 rounded-xl overflow-hidden max-h-52 overflow-y-auto">
-                          {activePeople(data).map(p => {
+                          {activePeople(data, memberSort).map(p => {
                             const sel = gForm.memberIds.includes(p.id);
                             // Scoped to the meetings currently checked in this form, so
                             // changing them re-evaluates who is available.
