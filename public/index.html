@@ -178,6 +178,8 @@
         archivedTip: 'No longer active — kept so this record stays accurate.',
         deleteRecordTip: 'Delete this session',
         confirmDeleteRecord: 'Delete this session? This cannot be undone.',
+        editDateTip: 'Change this session’s date',
+        editDateLabel: 'Move this session to',
         recordDetails: 'Details',
         conflictTitle: 'Someone else saved this session first',
         conflictBody: (theirs, mine) =>
@@ -370,6 +372,8 @@
         archivedTip: '已非現行成員 — 保留以維持此記錄的準確性。',
         deleteRecordTip: '刪除此記錄',
         confirmDeleteRecord: '確定刪除此記錄？此操作無法復原。',
+        editDateTip: '修改此記錄的日期',
+        editDateLabel: '將此記錄移至',
         recordDetails: '詳細資料',
         conflictTitle: '其他人已先儲存此次聚會記錄',
         conflictBody: (theirs, mine) =>
@@ -1608,6 +1612,8 @@
       const [dateOverrides, setDateOverrides] = useState(() => new Set());
       const [selectedGroupIds, setSelectedGroupIds] = useState(null);   // null = default (first group only)
       const [chartMeetingId, setChartMeetingId] = useState(null);   // null = default to the first meeting with chartable groups
+      const [editingDate, setEditingDate] = useState(null);   // { id, date } of the session whose date is being corrected
+      const [savingDate,  setSavingDate]  = useState(false);
       if (loading) return <Spinner />;
 
       const defaultMeeting = data.meetings.find(m => m.name?.en === 'Small Group Meeting');
@@ -1629,6 +1635,25 @@
         if (!confirm(t.confirmDeleteRecord)) return;
         try { await api.del(`/api/attendance/${id}`); await refresh(); }
         catch (e) { alert(t.errGeneric(e.message)); }
+      };
+
+      // Correcting the date a session was filed under. This PATCHes the record
+      // by id so the session *moves*; re-recording it under the Record view
+      // would instead leave the wrongly-dated one behind and create a second
+      // one, since that save is an upsert keyed on meeting+group+date.
+      const saveDate = async (rec) => {
+        const date = editingDate.date;
+        if (!date || date === rec.date) { setEditingDate(null); return; }
+        setSavingDate(true);
+        try {
+          // `rev` guards the same way a normal save does: if someone edited who
+          // attended while this date was open for editing, the move is refused
+          // rather than writing our stale copy of `records` back over theirs.
+          await api.patch(`/api/attendance/${rec.id}`, { date, records: rec.records, rev: rec.rev || 0 });
+          await refresh();
+          setEditingDate(null);
+        } catch (e) { alert(t.errGeneric(e.message)); }
+        finally { setSavingDate(false); }
       };
 
       const filtered = data.attendance.filter(a => activeFilter === 'all' || a.meetingId === activeFilter);
@@ -1829,11 +1854,33 @@
                                   <div className="text-xs text-gray-500">{t.presentOf(present, total)}</div>
                                 </div>
                                 {canManage && (
-                                  <button onClick={() => deleteRecord(rec.id)} title={t.deleteRecordTip}
-                                    className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg"><I.Trash /></button>
+                                  <>
+                                    <button onClick={() => setEditingDate({ id: rec.id, date: rec.date })} title={t.editDateTip}
+                                      className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg"><I.Edit /></button>
+                                    <button onClick={() => deleteRecord(rec.id)} title={t.deleteRecordTip}
+                                      className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg"><I.Trash /></button>
+                                  </>
                                 )}
                               </div>
                             </div>
+                            {canManage && editingDate && editingDate.id === rec.id && (
+                              <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-3 mb-3">
+                                <label className="block text-xs font-semibold text-indigo-900 mb-1">{t.editDateLabel}</label>
+                                <input type="date" value={editingDate.date} autoFocus
+                                  onChange={e => setEditingDate(d => ({ ...d, date: e.target.value }))}
+                                  className="border border-gray-300 rounded-lg px-3 py-2 text-sm w-full bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+                                <div className="flex gap-2 mt-2">
+                                  <button onClick={() => setEditingDate(null)} disabled={savingDate}
+                                    className="flex-1 py-1.5 bg-white border border-gray-300 text-gray-700 rounded-lg text-xs font-semibold hover:bg-gray-50">
+                                    {t.cancel}
+                                  </button>
+                                  <button onClick={() => saveDate(rec)} disabled={savingDate}
+                                    className="flex-1 py-1.5 bg-indigo-600 text-white rounded-lg text-xs font-semibold hover:bg-indigo-700 disabled:bg-indigo-400">
+                                    {savingDate ? t.saving : t.save}
+                                  </button>
+                                </div>
+                              </div>
+                            )}
                             <div className="h-1.5 bg-gray-100 rounded-full mb-3">
                               <div className="h-1.5 bg-indigo-500 rounded-full" style={{ width:`${pct}%` }} />
                             </div>

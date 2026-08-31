@@ -1021,12 +1021,17 @@ app.patch('/api/attendance/:id', requireSuper, route(async (req, res) => {
     const group = s.groups.find(g => g.id === existing.groupId);
     if (!group) throw new HttpError(400, 'Unknown group');
 
-    const members = new Set(group.memberIds || []);
+    // Current members, plus anyone already recorded in this session. Archiving
+    // a person drops them from memberIds but leaves them in past records, so a
+    // members-only check would refuse to re-file any session old enough to
+    // contain someone since archived. Anyone outside both sets is still
+    // rejected, so a record can't have strangers injected into it.
+    const allowed = new Set([...(group.memberIds || []), ...existing.records.map(r => r.personId)]);
     const seen    = new Set();
     const clean   = [];
     for (const r of records) {
       const pid = r && r.personId;
-      if (!members.has(pid)) throw new HttpError(400, 'records contain someone who is not in this group');
+      if (!allowed.has(pid)) throw new HttpError(400, 'records contain someone who is not in this group');
       if (seen.has(pid)) throw new HttpError(400, 'records contain a duplicate person');
       seen.add(pid);
       clean.push({ personId: pid, present: !!(r && r.present) });
