@@ -539,6 +539,12 @@
     const fmtDateShort = (s, locale = 'en-US') =>
       new Date(s + 'T00:00:00').toLocaleDateString(locale, { month:'short', day:'numeric' });
 
+    // For spreadsheets: the reader's own numeric date (8/9/2026), which Excel
+    // recognises as a date rather than leaving as text the way it does an
+    // ISO string in some locales.
+    const fmtDateNumeric = (s, locale = 'en-US') =>
+      new Date(s + 'T00:00:00').toLocaleDateString(locale);
+
     // ─── API helpers ──────────────────────────────────────────────────────────
     // Registered by the Provider, so a session rejected anywhere in the app
     // drops straight back to the sign-in screen.
@@ -1789,6 +1795,16 @@
           : [{ label: trendLanguageOptions.find(o => o.id === activeTrendLanguage).label, groups: trendGroups }]
       ).filter(sr => hasSessions(sr.groups));
 
+      // What the sheet is *of*, written across the top so a saved file still
+      // says what it was scoped to once it is away from the app. The language
+      // selection, plus the groups if the picker has narrowed it further.
+      const trendScopeLabel = [
+        activeTrendLanguage === 'all'
+          ? t.allLanguages
+          : (trendLanguageOptions.find(o => o.id === activeTrendLanguage)?.label || t.allLanguages),
+        ...(pickedTrendGroups.length ? [pickedTrendGroups.map(g => localizedName(g, lang)).join(', ')] : []),
+      ].join(' — ');
+
       // One column per series (see trendSeries) plus a combined Total, one row
       // per week — the same figures the chart above plots, just laid out for a
       // spreadsheet. A lone series needs no Total column: it would repeat the
@@ -1805,16 +1821,24 @@
         const weeks = [...new Set(relevant.map(a => weekStart(a.date)))].sort();
         const inWeek = (week) => relevant.filter(a => weekStart(a.date) === week);
         const presentIn = (recs) => recs.reduce((sum, r) => sum + r.records.filter(x => x.present).length, 0);
-        const series = trendSeries;
-        const withTotal = series.length > 1;
-        const header = ['Week of', ...series.map(sr => sr.label), ...(withTotal ? ['Total'] : [])];
+
+        // A meeting per column, so one sheet answers "how did each meeting do,
+        // week by week" for whatever is selected above the chart. Under a
+        // single meeting filter that is one column. A meeting with nothing
+        // recorded is left out rather than carried as a column of blanks.
+        const columns = (activeFilter === 'all' ? data.meetings : data.meetings.filter(m => m.id === activeFilter))
+          .filter(m => relevant.some(a => a.meetingId === m.id));
+
+        // No Total across the columns: the same person attends the Lord's Day
+        // meeting *and* a small group, so adding meetings together counts them
+        // twice. The chart's single line is the combined figure.
+        const header = ['Week of', ...columns.map(m => localizedName(m, lang))];
         const rows = weeks.map(week => {
           const wk = inWeek(week);
-          const perSeries = series.map(sr => {
-            const recs = wk.filter(a => sr.groups.some(g => g.id === a.groupId));
+          return [fmtDateNumeric(week, t.locale), ...columns.map(m => {
+            const recs = wk.filter(a => a.meetingId === m.id);
             return recs.length ? presentIn(recs) : '';
-          });
-          return [week, ...perSeries, ...(withTotal ? [presentIn(wk)] : [])];
+          })];
         });
 
         const personName = (personId) => {
@@ -1840,7 +1864,7 @@
         // A week can hold more than one session for a member (several meetings
         // under "All Meetings"), so the cell answers "did they turn up at all
         // that week?" — Yes beats No, and blank means nothing was recorded.
-        const detailHeader = ['Group', 'Name', ...weeks];
+        const detailHeader = ['Group', 'Name', ...weeks.map(w => fmtDateNumeric(w, t.locale))];
         const detailRows = memberKeys.map(({ groupId, personId }) => {
           const group = trendGroups.find(g => g.id === groupId);
           const perWeek = weeks.map(week => {
@@ -1855,7 +1879,7 @@
         });
 
         downloadCSV(`overall-attendance-trend-${todayStr()}.csv`,
-          [header, ...rows, [], detailHeader, ...detailRows]);
+          [[trendScopeLabel], header, ...rows, [], detailHeader, ...detailRows]);
       };
 
       // Group trends are shown for one meeting at a time, picked from a
