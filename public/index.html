@@ -1755,29 +1755,52 @@
       const trendHasSessions = data.attendance.some(a =>
         trendGroups.some(g => g.id === a.groupId) && (activeFilter === 'all' || a.meetingId === activeFilter));
 
-      // One column per trend group plus a combined Total, one row per week —
-      // the same figures the chart above plots, just laid out for a spreadsheet.
-      // Weeks, not dates, because groups meet on different weekdays (see
-      // weekStart). Followed by a per-member detail table (group + name, not
-      // shown on the chart itself): one row per group+member, one column per
-      // week, so the same week's attendance lines up side by side instead of
-      // repeating rows.
+      // What the exported summary breaks down by, which is whatever is driving
+      // the chart. Pick groups and you asked for those groups, so they are the
+      // columns. Pick none and the selection *is* the language — one column for
+      // the language you are looking at, or one per language under All
+      // Languages — rather than the groups that happen to sit inside it. With
+      // nothing labelled at all there is no language axis to use, so groups
+      // remain the only sensible breakdown.
+      const inLanguage = (groups, id) => groups.filter(g => (g.languageId || 'none') === id);
+      const trendSeries =
+        pickedTrendGroups.length || trendLanguageOptions.length === 0
+          ? trendGroups.map(g => ({ label: localizedName(g, lang), groups: [g] }))
+        : activeTrendLanguage === 'all'
+          ? trendLanguageOptions
+              .map(o => ({ label: o.label, groups: inLanguage(languageGroups, o.id) }))
+              .filter(sr => sr.groups.length)
+          : [{ label: trendLanguageOptions.find(o => o.id === activeTrendLanguage).label, groups: trendGroups }];
+
+      // One column per series (see trendSeries) plus a combined Total, one row
+      // per week — the same figures the chart above plots, just laid out for a
+      // spreadsheet. A lone series needs no Total column: it would repeat the
+      // one column beside it. Weeks, not dates, because groups meet on
+      // different weekdays (see weekStart). Followed by a per-member detail
+      // table (group + name, not shown on the chart itself): one row per
+      // group+member, one column per week, so the same week's attendance lines
+      // up side by side instead of repeating rows. The detail stays per group
+      // whatever the summary breaks down by — that is where a reader goes to
+      // see which groups make up a language's figure.
       const exportTrendCsv = () => {
         const relevant = data.attendance.filter(a =>
           trendGroups.some(g => g.id === a.groupId) && (activeFilter === 'all' || a.meetingId === activeFilter));
         const weeks = [...new Set(relevant.map(a => weekStart(a.date)))].sort();
         const inWeek = (week) => relevant.filter(a => weekStart(a.date) === week);
-        const header = ['Week of', ...trendGroups.map(g => localizedName(g, lang)), 'Total'];
+        const presentIn = (recs) => recs.reduce((sum, r) => sum + r.records.filter(x => x.present).length, 0);
+        // A series with nothing recorded under this meeting filter would be a
+        // column of blanks — reads as a broken export rather than as an empty
+        // language, so leave it out.
+        const series = trendSeries.filter(sr => relevant.some(a => sr.groups.some(g => g.id === a.groupId)));
+        const withTotal = series.length > 1;
+        const header = ['Week of', ...series.map(sr => sr.label), ...(withTotal ? ['Total'] : [])];
         const rows = weeks.map(week => {
           const wk = inWeek(week);
-          const perGroup = trendGroups.map(g => {
-            const recs = wk.filter(a => a.groupId === g.id);
-            return recs.length
-              ? recs.reduce((sum, r) => sum + r.records.filter(x => x.present).length, 0)
-              : '';
+          const perSeries = series.map(sr => {
+            const recs = wk.filter(a => sr.groups.some(g => g.id === a.groupId));
+            return recs.length ? presentIn(recs) : '';
           });
-          const total = wk.reduce((sum, r) => sum + r.records.filter(x => x.present).length, 0);
-          return [week, ...perGroup, total];
+          return [week, ...perSeries, ...(withTotal ? [presentIn(wk)] : [])];
         });
 
         const personName = (personId) => {
@@ -1887,7 +1910,7 @@
                       <MultiSelectDropdown options={languageGroups} selectedIds={new Set(trendGroupIds)}
                         onToggle={toggleTrendGroup} lang={lang} placeholder={t.allGroupsDefault} />
                     )}
-                    {trendGroups.length > 0 && (
+                    {trendGroups.length > 0 && trendHasSessions && (
                       <button type="button" onClick={exportTrendCsv}
                         className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg border border-gray-300 bg-white text-gray-600 hover:border-indigo-400 hover:text-indigo-600">
                         <I.Download /> {t.exportCsv}
