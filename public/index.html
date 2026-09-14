@@ -1426,9 +1426,22 @@
     const CHART_COLORS = ['#6366f1','#10b981','#f59e0b','#ef4444','#8b5cf6','#06b6d4'];
     const shortDate = (s) => new Date(s + 'T00:00:00').toLocaleDateString('en-US', { month:'short', day:'numeric' });
 
-    const AttendanceChart = ({ data, groups, meetingId, presentTip, title, lang }) => {
+    // `groups` is what gets totalled; `seriesLabels` is what that total is
+    // *called*. They differ whenever the selection above the chart is coarser
+    // than the groups underneath it — All Languages rolls up two languages, not
+    // four groups, and naming every group would bury that. Falls back to the
+    // group names when no labels are given.
+    const AttendanceChart = ({ data, groups, meetingId, presentTip, title, lang, seriesLabels }) => {
       const canvasRef = useRef(null);
       const chartRef  = useRef(null);
+
+      const rollup = (seriesLabels && seriesLabels.length)
+        ? seriesLabels
+        : groups.map(g => localizedName(g, lang));
+      // Joined before it reaches the dep array: a fresh array every render
+      // would rebuild the chart on every render, the strings do not.
+      const rollupTip   = rollup.join(', ');
+      const rollupTitle = rollup.join(' + ');
 
       // One combined line: the total present across every group passed in,
       // per week. Groups hold the same meeting on different weekdays, so a
@@ -1450,7 +1463,7 @@
         return {
           labels: weeks.map(w => weekLabel(w, lang)),
           datasets: [{
-            label: groups.map(g => localizedName(g, lang)).join(', '),
+            label: rollupTip,
             data: totals,
             borderColor: CHART_COLORS[0],
             backgroundColor: 'rgba(99,102,241,0.08)',
@@ -1461,7 +1474,7 @@
             spanGaps: false,
           }],
         };
-      }, [data.attendance, groups, meetingId, lang]);
+      }, [data.attendance, groups, meetingId, lang, rollupTip]);
 
       useEffect(() => {
         if (!canvasRef.current || !labels.length) return;
@@ -1503,7 +1516,7 @@
       return (
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 mb-4">
           {title && <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide">{title}</h2>}
-          <p className="text-xs text-gray-400 mb-3">{groups.map(g => localizedName(g, lang)).join(' + ')}</p>
+          <p className="text-xs text-gray-400 mb-3">{rollupTitle}</p>
           <canvas ref={canvasRef} />
         </div>
       );
@@ -1752,25 +1765,29 @@
       // meeting filter on screen — a real possibility now that choosing a
       // language selects its groups for you, and a silently missing panel
       // reads as a bug. Same test the chart itself applies.
-      const trendHasSessions = data.attendance.some(a =>
-        trendGroups.some(g => g.id === a.groupId) && (activeFilter === 'all' || a.meetingId === activeFilter));
+      const hasSessions = (groups) => data.attendance.some(a =>
+        groups.some(g => g.id === a.groupId) && (activeFilter === 'all' || a.meetingId === activeFilter));
+      const trendHasSessions = hasSessions(trendGroups);
 
-      // What the exported summary breaks down by, which is whatever is driving
-      // the chart. Pick groups and you asked for those groups, so they are the
-      // columns. Pick none and the selection *is* the language — one column for
-      // the language you are looking at, or one per language under All
-      // Languages — rather than the groups that happen to sit inside it. With
-      // nothing labelled at all there is no language axis to use, so groups
-      // remain the only sensible breakdown.
+      // What the trend is broken down by — the CSV's columns, and the names the
+      // chart puts on the total it plots. Pick groups and you asked for those
+      // groups, so they are the breakdown. Pick none and the selection *is* the
+      // language: one entry for the language you are looking at, or one per
+      // language under All Languages, rather than the groups that happen to sit
+      // inside it. With nothing labelled at all there is no language axis to
+      // use, so groups remain the only sensible breakdown.
+      //
+      // Anything with no session under the current meeting filter drops out
+      // here: as a CSV column it would be blanks all the way down, and in the
+      // chart's caption it would credit a language that contributed nothing.
       const inLanguage = (groups, id) => groups.filter(g => (g.languageId || 'none') === id);
-      const trendSeries =
+      const trendSeries = (
         pickedTrendGroups.length || trendLanguageOptions.length === 0
           ? trendGroups.map(g => ({ label: localizedName(g, lang), groups: [g] }))
         : activeTrendLanguage === 'all'
-          ? trendLanguageOptions
-              .map(o => ({ label: o.label, groups: inLanguage(languageGroups, o.id) }))
-              .filter(sr => sr.groups.length)
-          : [{ label: trendLanguageOptions.find(o => o.id === activeTrendLanguage).label, groups: trendGroups }];
+          ? trendLanguageOptions.map(o => ({ label: o.label, groups: inLanguage(languageGroups, o.id) }))
+          : [{ label: trendLanguageOptions.find(o => o.id === activeTrendLanguage).label, groups: trendGroups }]
+      ).filter(sr => hasSessions(sr.groups));
 
       // One column per series (see trendSeries) plus a combined Total, one row
       // per week — the same figures the chart above plots, just laid out for a
@@ -1788,10 +1805,7 @@
         const weeks = [...new Set(relevant.map(a => weekStart(a.date)))].sort();
         const inWeek = (week) => relevant.filter(a => weekStart(a.date) === week);
         const presentIn = (recs) => recs.reduce((sum, r) => sum + r.records.filter(x => x.present).length, 0);
-        // A series with nothing recorded under this meeting filter would be a
-        // column of blanks — reads as a broken export rather than as an empty
-        // language, so leave it out.
-        const series = trendSeries.filter(sr => relevant.some(a => sr.groups.some(g => g.id === a.groupId)));
+        const series = trendSeries;
         const withTotal = series.length > 1;
         const header = ['Week of', ...series.map(sr => sr.label), ...(withTotal ? ['Total'] : [])];
         const rows = weeks.map(week => {
@@ -1919,7 +1933,8 @@
                   </div>
                 </div>
                 {trendGroups.length > 0 && trendHasSessions ? (
-                  <AttendanceChart data={data} groups={trendGroups} meetingId={activeFilter} presentTip={t.chartPresentTip} title="" lang={lang} />
+                  <AttendanceChart data={data} groups={trendGroups} meetingId={activeFilter} presentTip={t.chartPresentTip}
+                    title="" lang={lang} seriesLabels={trendSeries.map(sr => sr.label)} />
                 ) : (
                   <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4">
                     <p className="text-sm text-gray-400">
