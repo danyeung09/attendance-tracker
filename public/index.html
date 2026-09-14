@@ -799,10 +799,7 @@
 
       // Same optimistic-then-persist pattern, for this account's own Overall
       // Attendance Trend group picks.
-      const toggleTrendGroup = useCallback(async (groupId) => {
-        const next = trendGroupIds.includes(groupId)
-          ? trendGroupIds.filter(id => id !== groupId)
-          : [...trendGroupIds, groupId];
+      const saveTrendGroups = useCallback(async (next) => {
         setTrendGroupIds(next);
         try {
           await api.patch('/api/me/trend-groups', { groupIds: next });
@@ -810,6 +807,12 @@
           setTrendGroupIds(trendGroupIds);
         }
       }, [trendGroupIds]);
+
+      const toggleTrendGroup = useCallback((groupId) => saveTrendGroups(
+        trendGroupIds.includes(groupId)
+          ? trendGroupIds.filter(id => id !== groupId)
+          : [...trendGroupIds, groupId]
+      ), [trendGroupIds, saveTrendGroups]);
 
       // Same optimistic-then-persist pattern as the pickers above, taking a
       // partial change so picking a name half and flipping the direction each
@@ -849,7 +852,7 @@
           role, isAdmin, canManage, username, breakGlass, authState, authNotice,
           signIn, register, signInBreakGlass, signOut,
           focusGroupIds, toggleFocusGroup,
-          trendGroupIds, toggleTrendGroup,
+          trendGroupIds, toggleTrendGroup, saveTrendGroups,
           memberSort, setMemberSort,
         }}>
           {children}
@@ -1561,7 +1564,11 @@
     // A checkbox list behind a button, for picking several groups at once
     // instead of a native <select multiple> (which needs ctrl/cmd-click and
     // hides how many are picked).
-    const MultiSelectDropdown = ({ options, selectedIds, onToggle, lang, placeholder }) => {
+    // `onSelectAll` adds an "All …" row above the list, ticked while nothing
+    // else is. An empty selection already means all of them, but that is only
+    // discoverable by unticking every box one at a time — the row makes it a
+    // single click, and says which state you are in.
+    const MultiSelectDropdown = ({ options, selectedIds, onToggle, lang, placeholder, onSelectAll }) => {
       const [open, setOpen] = useState(false);
       const ref = useRef(null);
 
@@ -1582,6 +1589,13 @@
           </button>
           {open && (
             <div className="absolute right-0 z-10 mt-1 w-56 bg-white border border-gray-200 rounded-lg shadow-lg py-1 max-h-60 overflow-auto">
+              {onSelectAll && (
+                <label className="flex items-center gap-2 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-indigo-50 cursor-pointer border-b border-gray-100 mb-1">
+                  <input type="checkbox" checked={selectedIds.size === 0} onChange={onSelectAll}
+                    className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-400" />
+                  {placeholder}
+                </label>
+              )}
               {options.map(o => {
                 const checked = selectedIds.has(o.id);
                 return (
@@ -1609,7 +1623,8 @@
 
     // ─── History View ─────────────────────────────────────────────────────────
     const HistoryView = () => {
-      const { data, loading, t, lang, canManage, refresh, trendGroupIds, toggleTrendGroup, breakGlass, memberSort } = useApp();
+      const { data, loading, t, lang, canManage, refresh, trendGroupIds, toggleTrendGroup, saveTrendGroups,
+              breakGlass, memberSort } = useApp();
       const [filter, setFilter] = useState(null);   // null = default to Small Group Meeting until user picks
       const [expanded, setExpanded] = useState(() => new Set());
       const [dateOverrides, setDateOverrides] = useState(() => new Set());
@@ -1730,6 +1745,7 @@
       const canSaveGroupPick = canManage && !breakGlass;
       const groupChartIds    = canSaveGroupPick ? trendGroupIds : (groupChartLocal || []);
       const toggleGroupChart = canSaveGroupPick ? toggleTrendGroup : toggleIn(setGroupChartLocal);
+      const clearGroupChart  = canSaveGroupPick ? () => saveTrendGroups([]) : () => setGroupChartLocal([]);
       const groupChartOptions = data.groups.filter(g => hasSessions([g]));
       const groupChartSeries = chosen(groupChartIds, groupChartOptions)
         .map(g => ({ id: g.id, label: localizedName(g, lang), groups: [g] }))
@@ -1845,10 +1861,12 @@
                 <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">{t.trendByLanguage}</h2>
                 <div className="flex items-center gap-2 flex-wrap">
                   <MultiSelectDropdown options={data.meetings} selectedIds={new Set(langChartMeetings)}
-                    onToggle={toggleIn(setLangChartMeetings)} lang={lang} placeholder={t.allMeetingsDefault} />
+                    onToggle={toggleIn(setLangChartMeetings)} onSelectAll={() => setLangChartMeetings([])}
+                    lang={lang} placeholder={t.allMeetingsDefault} />
                   {languageOptions.length > 0 && (
                     <MultiSelectDropdown options={languageOptions} selectedIds={new Set(langChartLanguages)}
-                      onToggle={toggleIn(setLangChartLanguages)} lang={lang} placeholder={t.allLanguagesDefault} />
+                      onToggle={toggleIn(setLangChartLanguages)} onSelectAll={() => setLangChartLanguages([])}
+                      lang={lang} placeholder={t.allLanguagesDefault} />
                   )}
                   {seriesHaveSessions(langChartSeries) && (
                     <button type="button" onClick={exportLangCsv} className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg border border-gray-300 bg-white text-gray-600 hover:border-indigo-400 hover:text-indigo-600">
@@ -1871,10 +1889,12 @@
                 <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">{t.trendByGroup}</h2>
                 <div className="flex items-center gap-2 flex-wrap">
                   <MultiSelectDropdown options={data.meetings} selectedIds={new Set(groupChartMeetings)}
-                    onToggle={toggleIn(setGroupChartMeetings)} lang={lang} placeholder={t.allMeetingsDefault} />
+                    onToggle={toggleIn(setGroupChartMeetings)} onSelectAll={() => setGroupChartMeetings([])}
+                    lang={lang} placeholder={t.allMeetingsDefault} />
                   {groupChartOptions.length > 0 && (
                     <MultiSelectDropdown options={groupChartOptions} selectedIds={new Set(groupChartIds)}
-                      onToggle={toggleGroupChart} lang={lang} placeholder={t.allGroupsDefault} />
+                      onToggle={toggleGroupChart} onSelectAll={clearGroupChart}
+                      lang={lang} placeholder={t.allGroupsDefault} />
                   )}
                   {seriesHaveSessions(groupChartSeries) && (
                     <button type="button" onClick={exportGroupCsv} className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg border border-gray-300 bg-white text-gray-600 hover:border-indigo-400 hover:text-indigo-600">
