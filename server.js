@@ -31,16 +31,28 @@ const uid = () => crypto.randomBytes(6).toString('hex');
 // language without being recreated. The seed only ships an English string on
 // both sides; a real admin fills in the other language from the UI.
 const bilingual = (s) => ({ en: s, zh: s });
+
+// The languages a congregation meets in. A group carries one of these, so the
+// attendance trend can be read for a single language or for all of them at
+// once. Three to start with — the list is editable, so an admin adds whatever
+// else they need rather than being stuck with these.
+const DEFAULT_LANGUAGES = [
+  { id:'lang-en', name:{ en:'English', zh:'英文' } },
+  { id:'lang-zh', name:{ en:'Chinese', zh:'中文' } },
+  { id:'lang-ko', name:{ en:'Korean',  zh:'韓文' } },
+];
+
 const SEED = {
   meetings: [
     { id:'m1', name:bilingual("Lord's Meeting"),      dayOfWeek:0 },
     { id:'m2', name:bilingual('Small Group Meeting'), dayOfWeek:5 },
   ],
+  languages: DEFAULT_LANGUAGES.map(l => ({ ...l, name: { ...l.name } })),
   groups: [
-    { id:'g1', name:bilingual('Worship Team'), meetingIds:['m1'], memberIds:['p1','p2','p3'] },
-    { id:'g2', name:bilingual('Youth Group'),  meetingIds:['m1'], memberIds:['p4','p5','p6'] },
-    { id:'g3', name:bilingual('Alpha Group'),  meetingIds:['m2'], memberIds:['p1','p3','p5'] },
-    { id:'g4', name:bilingual('Beta Group'),   meetingIds:['m2'], memberIds:['p2','p4','p6'] },
+    { id:'g1', name:bilingual('Worship Team'), meetingIds:['m1'], memberIds:['p1','p2','p3'], languageId:'lang-en' },
+    { id:'g2', name:bilingual('Youth Group'),  meetingIds:['m1'], memberIds:['p4','p5','p6'], languageId:'lang-en' },
+    { id:'g3', name:bilingual('Alpha Group'),  meetingIds:['m2'], memberIds:['p1','p3','p5'], languageId:'lang-zh' },
+    { id:'g4', name:bilingual('Beta Group'),   meetingIds:['m2'], memberIds:['p2','p4','p6'], languageId:'lang-ko' },
   ],
   people: [
     { id:'p1', firstName:'John',    lastName:'Doe',      phone:'555-0101' },
@@ -508,6 +520,7 @@ app.use('/api', requireAuth);
 // would hand every signed-in viewer the salts and password hashes.
 app.get('/api/data', requireViewer, (req, res) => res.json({
   meetings:   store.meetings,
+  languages:  store.languages,
   groups:     store.groups,
   people:     store.people,
   attendance: store.attendance,
@@ -772,6 +785,59 @@ app.delete('/api/meetings/:id', requireAdmin, route(async (req, res) => {
   res.json({ ok: true });
 }));
 
+// ─── Languages ────────────────────────────────────────────────────────────────
+// A short, editable list of the languages groups meet in. It is a group
+// attribute rather than a meeting one: the same Lord's Meeting is attended by
+// an English group and a Chinese group, and the attendance trend is read one
+// language at a time. Created and renamed by a super user (whoever manages
+// groups needs to be able to label a new one); deleting stays with admins,
+// same as archiving a person.
+function resolveLanguageId(s, languageId) {
+  // Unset is legitimate — a group that predates this list, or one nobody has
+  // labelled yet, still has to save.
+  if (languageId == null || languageId === '') return null;
+  if (!s.languages.some(l => l.id === languageId)) throw new HttpError(400, 'Unknown language');
+  return languageId;
+}
+
+app.post('/api/languages', requireSuper, route(async (req, res) => {
+  const bilingualName = normalizeBilingualName(req.body && req.body.name);
+  if (!bilingualName) throw new HttpError(400, 'name required');
+  const id = await commit(s => {
+    const language = { id: uid(), name: bilingualName };
+    s.languages.push(language);
+    return language.id;
+  });
+  res.json({ id });
+}));
+
+app.put('/api/languages/:id', requireSuper, route(async (req, res) => {
+  const bilingualName = normalizeBilingualName(req.body && req.body.name);
+  if (!bilingualName) throw new HttpError(400, 'name required');
+  await commit(s => {
+    if (!s.languages.some(l => l.id === req.params.id)) throw new HttpError(404, 'Language not found');
+    s.languages = s.languages.map(l => l.id === req.params.id ? { ...l, name: bilingualName } : l);
+  });
+  res.json({ ok: true });
+}));
+
+app.delete('/api/languages/:id', requireAdmin, route(async (req, res) => {
+  await commit(s => {
+    const language = s.languages.find(l => l.id === req.params.id);
+    if (!language) throw new HttpError(404, 'Language not found');
+    // Refused rather than silently unlabelling groups: the trend is read by
+    // language, so quietly dropping the label would make groups disappear
+    // from a filtered chart with nothing to explain why.
+    const used = s.groups.filter(g => g.languageId === req.params.id).length;
+    if (used) {
+      throw new HttpError(400,
+        `${language.name.en || language.name.zh} is still set on ${used} group${used === 1 ? '' : 's'} — change those first.`);
+    }
+    s.languages = s.languages.filter(l => l.id !== req.params.id);
+  });
+  res.json({ ok: true });
+}));
+
 // ─── Groups ───────────────────────────────────────────────────────────────────
 // A group can be assigned to any number of meetings, so there is never a need
 // to create the same group again for another meeting — assign the one group
@@ -803,14 +869,14 @@ function validateMeetingIds(s, meetingIds) {
 }
 
 app.post('/api/groups', requireSuper, route(async (req, res) => {
-  const { name, meetingIds, memberIds = [] } = req.body || {};
+  const { name, meetingIds, memberIds = [], languageId = null } = req.body || {};
   const bilingualName = normalizeBilingualName(name);
   if (!bilingualName) throw new HttpError(400, 'name required');
   if (!Array.isArray(memberIds)) throw new HttpError(400, 'memberIds must be an array');
   const id = await commit(s => {
     validateMeetingIds(s, meetingIds);
     assertNoMeetingConflict(s, memberIds, meetingIds, null);
-    const group = { id: uid(), name: bilingualName, meetingIds, memberIds };
+    const group = { id: uid(), name: bilingualName, meetingIds, memberIds, languageId: resolveLanguageId(s, languageId) };
     s.groups.push(group);
     return group.id;
   });
@@ -818,7 +884,7 @@ app.post('/api/groups', requireSuper, route(async (req, res) => {
 }));
 
 app.put('/api/groups/:id', requireSuper, route(async (req, res) => {
-  const { name, meetingIds, memberIds = [] } = req.body || {};
+  const { name, meetingIds, memberIds = [], languageId } = req.body || {};
   const bilingualName = normalizeBilingualName(name);
   if (!bilingualName) throw new HttpError(400, 'name required');
   if (!Array.isArray(memberIds)) throw new HttpError(400, 'memberIds must be an array');
@@ -827,8 +893,14 @@ app.put('/api/groups/:id', requireSuper, route(async (req, res) => {
     if (!existing) throw new HttpError(404, 'Group not found');
     validateMeetingIds(s, meetingIds);
     assertNoMeetingConflict(s, memberIds, meetingIds, req.params.id);
+    // Several callers PUT a group just to add or drop a member and send only
+    // name/meetingIds/memberIds. Omitting the field keeps the language it has,
+    // so those edits can't quietly strip the label; sending null clears it.
+    const nextLanguageId = languageId === undefined
+      ? (existing.languageId ?? null)
+      : resolveLanguageId(s, languageId);
     s.groups = s.groups.map(g =>
-      g.id === req.params.id ? { ...g, name: bilingualName, meetingIds, memberIds } : g
+      g.id === req.params.id ? { ...g, name: bilingualName, meetingIds, memberIds, languageId: nextLanguageId } : g
     );
   });
   res.json({ ok: true });
@@ -1142,18 +1214,40 @@ function migrateBilingualNames(data) {
   return migrated;
 }
 
+// Groups gained a language. A store written before that has no `languages`
+// list at all, so seed it with the defaults, and give every existing group the
+// `languageId: null` key so an unlabelled group is explicit rather than merely
+// missing. Only a store with no `languages` key at all is seeded — an admin
+// who has cleared the list out entirely gets to keep it that way.
+function migrateLanguages(data) {
+  let migrated = false;
+  if (!Array.isArray(data.languages)) {
+    data.languages = DEFAULT_LANGUAGES.map(l => ({ ...l, name: { ...l.name } }));
+    migrated = true;
+  }
+  data.groups = (data.groups || []).map(g => {
+    if ('languageId' in g) return g;
+    migrated = true;
+    return { ...g, languageId: null };
+  });
+  return migrated;
+}
+
 // ─── Start ────────────────────────────────────────────────────────────────────
 async function start() {
   await initDb();
   store = await load();
   // Tolerate a hand-edited file that's missing a top-level key.
+  // languages is deliberately absent here — migrateLanguages seeds it, and
+  // pre-filling it with [] would hide "this store predates languages" from it.
   store = { meetings: [], groups: [], people: [], attendance: [], users: [], ...store };
   if (!Array.isArray(store.users)) store.users = [];
-  // Both must run unconditionally — `||` would short-circuit the second once
+  // Each must run unconditionally — `||` would short-circuit the rest once
   // the first finds something to migrate.
   const meetingIdsMigrated = migrateGroupMeetingIds(store);
   const namesMigrated      = migrateBilingualNames(store);
-  if (meetingIdsMigrated || namesMigrated) await persist(store);
+  const languagesMigrated  = migrateLanguages(store);
+  if (meetingIdsMigrated || namesMigrated || languagesMigrated) await persist(store);
   if (store.users.length === 0) {
     console.log(
       'No user accounts yet. Sign in with the break-glass admin password (ADMIN_PASSWORD),\n' +

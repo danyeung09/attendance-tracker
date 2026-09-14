@@ -67,6 +67,7 @@
         chartAbsentLabel: 'Absent',
         attendanceHistory: 'Attendance History',
         allMeetings: 'All Meetings',
+        allLanguages: 'All Languages',
         noRecords: 'No attendance records found.',
         attendanceTrend: 'Attendance Trend',
         byGroup: 'By Group',
@@ -74,6 +75,7 @@
         noTrendGroups: 'No groups are set up for this chart yet.',
         noTrendGroupsHint: 'Pick groups above to build your Overall Attendance Trend.',
         noTrendGroupsBreakGlass: 'This is a personal preference tied to an account. Sign in with your own admin account (not the break-glass password) to set up your Overall Attendance Trend.',
+        noTrendGroupsInLanguage: language => `None of the groups you picked are ${language} groups. Choose another language, or add one of its groups above.`,
         exportCsv: 'Export CSV',
         adminPasswordPh: 'Admin password',
         login: 'Sign In',
@@ -135,7 +137,7 @@
         adminActive: 'Admin mode active',
         superActive: 'Super user mode active',
         exitAdmin: 'Exit',
-        tabLabels: ['groups', 'people', 'meetings', 'users'],
+        tabLabels: ['groups', 'people', 'meetings', 'languages', 'users'],
         newGroup: 'New Group',
         editGroupTitle: 'Edit Group',
         newGroupTitle: 'New Group',
@@ -150,6 +152,16 @@
         addPeopleFirst: 'Add people first in the People tab.',
         addMember: 'Add Member',
         noGroupsYet: 'No groups yet.',
+        languageLabel: 'Language',
+        noLanguageOption: 'No language',
+        noLanguageSet: 'No language set',
+        newLanguage: 'New Language',
+        editLanguageTitle: 'Edit Language',
+        newLanguageTitle: 'New Language',
+        languageNameLabel: 'Language Name',
+        saveLanguage: 'Save Language',
+        noLanguages: 'No languages yet.',
+        languagesHint: 'A group is set to one of these, so the Attendance Trend can be read one language at a time.',
         importCSV: 'Import CSV',
         newPerson: 'New Person',
         noPeople: 'No people added yet.',
@@ -172,6 +184,7 @@
         confirmDeleteGroup: 'Delete this group?',
         confirmDeletePerson: 'Remove this person? They will be taken out of all groups, but past attendance records keep their name.',
         confirmDeleteMeeting: 'Delete this meeting? Groups only assigned to it will be removed; groups also assigned to other meetings will stay, just without this one.',
+        confirmDeleteLanguage: 'Delete this language? Any group still set to it has to be changed over first.',
         confirmRemoveMember: 'Remove this person from the group?',
         groupMeetingsRequired: 'Select at least one meeting.',
         alreadyInGroup: name => `This person is already in "${name}" for this meeting. A member can only belong to one group per meeting.`,
@@ -190,6 +203,7 @@
         groupNameRequired: 'Group name required.',
         nameRequired: 'First and last name required.',
         meetingNameRequired: 'Meeting name required.',
+        languageNameRequired: 'Language name required.',
         noValidRows: 'No valid rows to import (firstName and lastName are required).',
         noUnassigned: 'Everyone is already in a group for this meeting. Create a new person, or remove someone from another group in this meeting first.',
         addMemberTo: 'to',
@@ -261,6 +275,7 @@
         chartAbsentLabel: '缺席',
         attendanceHistory: '出席歷史',
         allMeetings: '所有聚會',
+        allLanguages: '所有語言',
         noRecords: '找不到出席記錄。',
         attendanceTrend: '出席趨勢',
         byGroup: '按小組',
@@ -268,6 +283,7 @@
         noTrendGroups: '尚未設定此圖表的小組。',
         noTrendGroupsHint: '請在上方選擇小組，建立您自己的整體出席趨勢。',
         noTrendGroupsBreakGlass: '此為與帳號綁定的個人偏好設定。請使用您自己的管理員帳號（而非救援密碼）登入，以設定您的整體出席趨勢。',
+        noTrendGroupsInLanguage: language => `您所選的小組中沒有${language}的小組。請改選其他語言，或於上方加入該語言的小組。`,
         exportCsv: '匯出 CSV',
         adminPasswordPh: '管理員密碼',
         login: '登入',
@@ -329,7 +345,7 @@
         adminActive: '管理模式已啟用',
         superActive: '超級使用者模式已啟用',
         exitAdmin: '退出',
-        tabLabels: ['小組', '人員', '聚會', '帳號'],
+        tabLabels: ['小組', '人員', '聚會', '語言', '帳號'],
         newGroup: '新增小組',
         editGroupTitle: '編輯小組',
         newGroupTitle: '新增小組',
@@ -344,6 +360,16 @@
         addPeopleFirst: '請先在人員頁籤新增人員。',
         addMember: '新增成員',
         noGroupsYet: '尚未有小組。',
+        languageLabel: '語言',
+        noLanguageOption: '不設定語言',
+        noLanguageSet: '未設定語言',
+        newLanguage: '新增語言',
+        editLanguageTitle: '編輯語言',
+        newLanguageTitle: '新增語言',
+        languageNameLabel: '語言名稱',
+        saveLanguage: '儲存語言',
+        noLanguages: '尚未有語言。',
+        languagesHint: '每個小組可設定其中一種語言，出席趨勢即可按語言分別檢視。',
         importCSV: '匯入 CSV',
         newPerson: '新增人員',
         noPeople: '尚未新增人員。',
@@ -366,6 +392,7 @@
         confirmDeleteGroup: '確定刪除此小組？',
         confirmDeletePerson: '確定移除此人員？他們將從所有小組中移除，但過往的出席記錄仍會保留其姓名。',
         confirmDeleteMeeting: '確定刪除此聚會？僅屬於此聚會的小組將被移除；同時屬於其他聚會的小組會保留，只是不再包含此聚會。',
+        confirmDeleteLanguage: '確定刪除此語言？仍設定為此語言的小組須先改為其他語言。',
         confirmRemoveMember: '確定將此人從小組中移除？',
         groupMeetingsRequired: '請至少選擇一個聚會。',
         alreadyInGroup: name => `此人在此聚會中已屬於「${name}」。每位成員在同一聚會中只能屬於一個小組。`,
@@ -384,6 +411,7 @@
         groupNameRequired: '請輸入小組名稱。',
         nameRequired: '請輸入名字和姓氏。',
         meetingNameRequired: '請輸入聚會名稱。',
+        languageNameRequired: '請輸入語言名稱。',
         noValidRows: '沒有可匯入的有效資料（需要名字和姓氏）。',
         noUnassigned: '此聚會中所有人員均已分配到小組。請新增人員，或先從此聚會的其他小組移除成員。',
         addMemberTo: '至',
@@ -560,12 +588,17 @@
     const Ctx = createContext();
     const useApp = () => useContext(Ctx);
 
-    const EMPTY = { meetings:[], groups:[], people:[], attendance:[] };
+    const EMPTY = { meetings:[], languages:[], groups:[], people:[], attendance:[] };
 
     // A meeting/group name is bilingual — { en, zh } — so it reads correctly
     // under either language toggle. Falls back across languages so a name
     // never renders blank even if one side was somehow left empty.
     const localizedName = (obj, lang) => (obj && obj.name && (obj.name[lang] || obj.name.en || obj.name.zh)) || '';
+
+    // The language a group meets in, or null when nobody has labelled it yet
+    // (every group predating the language list starts out that way).
+    const groupLanguage = (data, group) =>
+      (group && group.languageId && (data.languages || []).find(l => l.id === group.languageId)) || null;
 
     // CSV group-name matching: a name typed in the CSV might be either the
     // English or the Chinese side of a bilingual group name.
@@ -1548,6 +1581,15 @@
       );
     };
 
+    // A group's language, shown wherever a group is listed. Greyed out when
+    // nothing has been set — an unlabelled group is easy to miss otherwise,
+    // and it will not appear under any language on the trend.
+    const LanguageChip = ({ language, lang, noneLabel }) => (
+      <span className={`text-xs px-2 py-0.5 rounded-full font-medium shrink-0 ${language ? 'bg-sky-100 text-sky-700' : 'bg-gray-100 text-gray-400 italic'}`}>
+        {language ? localizedName(language, lang) : noneLabel}
+      </span>
+    );
+
     // ─── Group Bar Chart ──────────────────────────────────────────────────────
     const GroupBarChart = ({ group, meetingId, data, presentLabel, absentLabel, lang }) => {
       const canvasRef = useRef(null);
@@ -1612,6 +1654,7 @@
       const [dateOverrides, setDateOverrides] = useState(() => new Set());
       const [selectedGroupIds, setSelectedGroupIds] = useState(null);   // null = default (first group only)
       const [chartMeetingId, setChartMeetingId] = useState(null);   // null = default to the first meeting with chartable groups
+      const [trendLanguage, setTrendLanguage] = useState('all');   // 'all', a language id, or 'none' for groups with no language set
       const [editingDate, setEditingDate] = useState(null);   // { id, date } of the session whose date is being corrected
       const [savingDate,  setSavingDate]  = useState(false);
       if (loading) return <Spinner />;
@@ -1680,7 +1723,23 @@
       // picker below, since it's meant to stay stable across visits rather
       // than reset per session. It still narrows to the top meeting filter,
       // same as the rest of the History page.
-      const trendGroups = data.groups.filter(g => trendGroupIds.includes(g.id));
+      const pickedTrendGroups = data.groups.filter(g => trendGroupIds.includes(g.id));
+
+      // The trend can be read one language at a time. Only the languages the
+      // picked groups actually use are offered, so the dropdown never lists a
+      // choice that would plot nothing — plus "No language" when some of them
+      // haven't been labelled, since those show up under no language at all.
+      const trendLanguageOptions = [
+        ...data.languages.filter(l => pickedTrendGroups.some(g => g.languageId === l.id))
+          .map(l => ({ id: l.id, label: localizedName(l, lang) })),
+        ...(pickedTrendGroups.some(g => !g.languageId) ? [{ id: 'none', label: t.noLanguageSet }] : []),
+      ];
+      // Deselecting the last group of a language would otherwise strand the
+      // filter on a choice that no longer exists.
+      const activeTrendLanguage = trendLanguageOptions.some(o => o.id === trendLanguage) ? trendLanguage : 'all';
+      const trendGroups = activeTrendLanguage === 'all'
+        ? pickedTrendGroups
+        : pickedTrendGroups.filter(g => (g.languageId || 'none') === activeTrendLanguage);
 
       // One column per trend group plus a combined Total, one row per week —
       // the same figures the chart above plots, just laid out for a spreadsheet.
@@ -1803,6 +1862,15 @@
                         <I.Download /> {t.exportCsv}
                       </button>
                     )}
+                    {/* Just a lens on the chart, so everyone gets it — unlike the
+                        group picker, which edits a saved personal preference. */}
+                    {trendLanguageOptions.length > 1 && (
+                      <select value={activeTrendLanguage} onChange={e => setTrendLanguage(e.target.value)}
+                        className="text-xs font-medium px-3 py-1.5 rounded-lg border border-gray-300 bg-white text-gray-700 hover:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-400">
+                        <option value="all">{t.allLanguages}</option>
+                        {trendLanguageOptions.map(o => <option key={o.id} value={o.id}>{o.label}</option>)}
+                      </select>
+                    )}
                     {canManage && !breakGlass && (
                       <MultiSelectDropdown options={data.groups} selectedIds={new Set(trendGroupIds)}
                         onToggle={toggleTrendGroup} lang={lang} placeholder={t.selectGroups} />
@@ -1814,7 +1882,9 @@
                 ) : (
                   <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4">
                     <p className="text-sm text-gray-400">
-                      {breakGlass ? t.noTrendGroupsBreakGlass : canManage ? t.noTrendGroupsHint : t.noTrendGroups}
+                      {pickedTrendGroups.length > 0
+                        ? t.noTrendGroupsInLanguage(trendLanguageOptions.find(o => o.id === activeTrendLanguage)?.label || '')
+                        : breakGlass ? t.noTrendGroupsBreakGlass : canManage ? t.noTrendGroupsHint : t.noTrendGroups}
                     </p>
                   </div>
                 )}
@@ -2072,7 +2142,7 @@
     };
 
     // ─── Admin View ───────────────────────────────────────────────────────────
-    const TAB_IDS = ['groups', 'people', 'meetings', 'users'];
+    const TAB_IDS = ['groups', 'people', 'meetings', 'languages', 'users'];
 
     const AdminView = () => {
       const { data, refresh, isAdmin, canManage, goBack, goHome, loading, t, lang, memberSort, setMemberSort } = useApp();
@@ -2150,16 +2220,18 @@
       const [gForm,    setGForm]    = useState(null);
       const [gEditing, setGEditing] = useState(null);
 
-      const openAddGroup  = ()  => { setGEditing(null); setGForm({ name:{en:'',zh:''}, meetingIds:data.meetings[0]?[data.meetings[0].id]:[], memberIds:[] }); };
-      const openEditGroup = (g) => { setGEditing(g.id); setGForm({ name:{...g.name}, meetingIds:[...g.meetingIds], memberIds:[...g.memberIds] }); };
+      const openAddGroup  = ()  => { setGEditing(null); setGForm({ name:{en:'',zh:''}, meetingIds:data.meetings[0]?[data.meetings[0].id]:[], memberIds:[], languageId:'' }); };
+      const openEditGroup = (g) => { setGEditing(g.id); setGForm({ name:{...g.name}, meetingIds:[...g.meetingIds], memberIds:[...g.memberIds], languageId:g.languageId || '' }); };
       const toggleGMember  = (id) => setGForm(f => ({ ...f, memberIds:  f.memberIds.includes(id)  ? f.memberIds.filter(x=>x!==id)  : [...f.memberIds, id] }));
       const toggleGMeeting = (id) => setGForm(f => ({ ...f, meetingIds: f.meetingIds.includes(id) ? f.meetingIds.filter(x=>x!==id) : [...f.meetingIds, id] }));
       const saveGroup = () => {
         if (!gForm.name.en.trim() && !gForm.name.zh.trim()) return alert(t.groupNameRequired);
         if (gForm.meetingIds.length === 0) return alert(t.groupMeetingsRequired);
         run(async () => {
-          if (gEditing) await api.put(`/api/groups/${gEditing}`, gForm);
-          else          await api.post('/api/groups', gForm);
+          // '' is how the select spells "no language"; the server stores null.
+          const body = { ...gForm, languageId: gForm.languageId || null };
+          if (gEditing) await api.put(`/api/groups/${gEditing}`, body);
+          else          await api.post('/api/groups', body);
           setGForm(null);
         });
       };
@@ -2258,6 +2330,26 @@
         run(() => api.del(`/api/meetings/${id}`));
       };
 
+      // ── Language form ──
+      const [lForm,    setLForm]    = useState(null);
+      const [lEditing, setLEditing] = useState(null);
+      const openAddLanguage  = ()  => { setLEditing(null);  setLForm({ name:{en:'',zh:''} }); };
+      const openEditLanguage = (l) => { setLEditing(l.id);  setLForm({ name:{...l.name} }); };
+      const saveLanguage = () => {
+        if (!lForm.name.en.trim() && !lForm.name.zh.trim()) return alert(t.languageNameRequired);
+        run(async () => {
+          if (lEditing) await api.put(`/api/languages/${lEditing}`, lForm);
+          else          await api.post('/api/languages', lForm);
+          setLForm(null);
+        });
+      };
+      // The server refuses while any group still carries the language, and
+      // says how many — so the alert in run() is the whole explanation.
+      const deleteLanguage = (id) => {
+        if (!confirm(t.confirmDeleteLanguage)) return;
+        run(() => api.del(`/api/languages/${id}`));
+      };
+
       // Role is server-assigned; this only decides which UI to show. Every
       // management endpoint re-checks it independently.
       if (!canManage) return <NoAccessNotice onCancel={goBack} />;
@@ -2315,7 +2407,10 @@
                               <div key={g.id} className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
                                 <div className="flex items-center justify-between mb-3">
                                   <div>
-                                    <p className="font-semibold text-gray-800">{localizedName(g, lang)}</p>
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                      <p className="font-semibold text-gray-800">{localizedName(g, lang)}</p>
+                                      <LanguageChip language={groupLanguage(data, g)} lang={lang} noneLabel={t.noLanguageSet} />
+                                    </div>
                                     <p className="text-sm text-gray-500">{t.memberCount(members.length)}</p>
                                   </div>
                                   <div className="flex gap-1">
@@ -2439,6 +2534,44 @@
                   );
                 })}
               </div>
+            </div>
+          )}
+
+          {/* ── Languages ── */}
+          {activeTab === 'languages' && (
+            <div>
+              <div className="flex items-start justify-between gap-3 mb-3">
+                <p className="text-sm text-gray-500">{t.languagesHint}</p>
+                <button onClick={openAddLanguage}
+                  className="shrink-0 flex items-center gap-1.5 bg-indigo-600 text-white px-3 py-2 rounded-lg hover:bg-indigo-700 text-sm font-semibold">
+                  <I.Plus /> {t.newLanguage}
+                </button>
+              </div>
+              {data.languages.length === 0
+                ? <p className="text-gray-400 text-sm italic">{t.noLanguages}</p>
+                : <div className="space-y-2">
+                    {data.languages.map(l => {
+                      const grpCount = data.groups.filter(g => g.languageId === l.id).length;
+                      return (
+                        <div key={l.id} className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <p className="font-semibold text-gray-800">{localizedName(l, lang)}</p>
+                              <p className="text-sm text-gray-500">{t.groupCount(grpCount)}</p>
+                            </div>
+                            <div className="flex gap-1">
+                              <button onClick={() => openEditLanguage(l)} className="p-2 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg"><I.Edit /></button>
+                              {/* Deleting a shared label is admin work, same as archiving a person. */}
+                              {isAdmin && (
+                                <button onClick={() => deleteLanguage(l.id)} className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg"><I.Trash /></button>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+              }
             </div>
           )}
 
@@ -2718,6 +2851,14 @@
                     </div>
                   </div>
                   <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">{t.languageLabel}</label>
+                    <select value={gForm.languageId} onChange={e => setGForm(f=>({...f,languageId:e.target.value}))}
+                      className="border border-gray-300 rounded-lg px-3 py-2 w-full text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400">
+                      <option value="">{t.noLanguageOption}</option>
+                      {data.languages.map(l => <option key={l.id} value={l.id}>{localizedName(l, lang)}</option>)}
+                    </select>
+                  </div>
+                  <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
                       {t.membersLabel} <span className="text-gray-400 font-normal">{t.selectedCount(gForm.memberIds.length)}</span>
                     </label>
@@ -2772,6 +2913,29 @@
                 <div className="flex gap-2">
                   <button onClick={() => setPForm(null)} className="flex-1 py-2 border border-gray-300 rounded-lg text-gray-600 hover:bg-gray-50 text-sm">{t.cancel}</button>
                   <button onClick={savePerson} className="flex-1 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-semibold text-sm">{t.savePerson}</button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ── Language Modal ── */}
+          {lForm && (
+            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+              <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-sm">
+                <h2 className="text-xl font-bold text-gray-800 mb-4">{lEditing ? t.editLanguageTitle : t.newLanguageTitle}</h2>
+                <div className="mb-5">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">{t.languageNameLabel}</label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <input value={lForm.name.en} onChange={e => setLForm(f=>({...f,name:{...f.name,en:e.target.value}}))} placeholder={t.nameEnLabel} autoFocus
+                      className="border border-gray-300 rounded-lg px-3 py-2 w-full text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+                    <input value={lForm.name.zh} onChange={e => setLForm(f=>({...f,name:{...f.name,zh:e.target.value}}))} placeholder={t.nameZhLabel}
+                      className="border border-gray-300 rounded-lg px-3 py-2 w-full text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+                  </div>
+                  <p className="text-xs text-gray-400 mt-1">{t.nameHint}</p>
+                </div>
+                <div className="flex gap-2">
+                  <button onClick={() => setLForm(null)} className="flex-1 py-2 border border-gray-300 rounded-lg text-gray-600 hover:bg-gray-50 text-sm">{t.cancel}</button>
+                  <button onClick={saveLanguage} className="flex-1 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-semibold text-sm">{t.saveLanguage}</button>
                 </div>
               </div>
             </div>
