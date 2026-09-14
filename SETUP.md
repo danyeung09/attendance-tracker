@@ -16,10 +16,11 @@ A web application for tracking attendance across meetings and groups. Data is st
    - [Option B: cPanel / Plesk Shared Hosting](#option-b-cpanel--plesk-shared-hosting)
    - [Option C: PaaS Platform](#option-c-paas-platform)
 4. [Environment Variables Reference](#environment-variables-reference)
-5. [Using the App](#using-the-app)
-6. [Management Panel](#management-panel)
-7. [Authentication](#authentication)
-8. [Troubleshooting](#troubleshooting)
+5. [Data Model and Upgrades](#data-model-and-upgrades)
+6. [Using the App](#using-the-app)
+7. [Management Panel](#management-panel)
+8. [Authentication](#authentication)
+9. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -428,6 +429,46 @@ it survives data loss.
 
 ---
 
+## Data Model and Upgrades
+
+The whole store is **one JSON document** — `meetings`, `languages`, `groups`,
+`people`, `attendance` and `users`. Locally that document is `data.json`; in
+production it is the single `data` column of the one-row `app_store` table. There
+are no per-entity tables, so **a change to the data never needs a schema change**:
+no `ALTER TABLE`, no migration tool, nothing to run by hand against the database.
+
+Instead the server reshapes the document in memory as it boots, writes it back
+once if anything changed, and only then starts listening. Three of these run
+today, in `server.js`:
+
+| Function | Brings forward |
+|----------|----------------|
+| `migrateGroupMeetingIds` | A group's single `meetingId` → the `meetingIds` list it carries now |
+| `migrateBilingualNames` | A plain-string meeting or group name → `{ en, zh }` |
+| `migrateLanguages` | Seeds the `languages` list, and gives every group a `languageId` |
+
+Each one is idempotent: a second boot finds nothing to do and writes nothing.
+
+### Upgrading an existing deployment
+
+Deploy the new code and restart. That is the whole procedure — the migration runs
+against whichever backend is configured, so a MySQL deployment needs no database
+work of its own.
+
+`migrateLanguages` in particular will, on the first boot after the upgrade:
+
+- add a `languages` list seeded with English, Chinese and Korean — **only** when
+  the document has no `languages` key at all, so an admin who deliberately empties
+  the list keeps it empty across restarts;
+- add `languageId: null` to every existing group, leaving them unlabelled until
+  somebody sets a language in **Manage › Groups**.
+
+Nothing is removed and no attendance record is touched, so the upgrade is safe to
+apply to a live store. Take a copy of `data.json` (or a `mysqldump` of `app_store`)
+first anyway if you want a way back.
+
+---
+
 ## Using the App
 
 ### Taking Attendance
@@ -440,7 +481,22 @@ it survives data loss.
 
 ### Viewing History
 
-Click the **clock icon** in the navigation bar. Filter by meeting. Each record shows the date, percentage, and colour-coded attendance (green = present, red = absent).
+Click the **clock icon** in the navigation bar.
+
+Two trend charts sit at the top, each with its own multi-select of meetings, so a
+trend can span several meetings at once:
+
+- **Trend by Language** — one line over everything until you pick languages, then a
+  line each to compare them. No group dimension.
+- **Trend by Group** — a line per group.
+
+Either can be exported with **Export CSV**: a heading naming what the sheet is of,
+then a column per meeting and a row per week. The group export also carries a
+per-member table underneath.
+
+Below the rule, the session list shows each record's date, percentage, and
+colour-coded attendance (green = present, red = absent), filtered by the meeting
+picker beside the **Sessions** heading.
 
 ### Refreshing Data
 
@@ -462,14 +518,25 @@ back to normal access without signing out.
 
 ### Managing Groups — super user or admin
 
-- **Add** — click **New Group**, enter a name, select a meeting, tick at least 2 members
+- **Add** — click **New Group**, enter a name, select a meeting, pick a language, tick at least 2 members
 - **Edit** — click the pencil icon
 - **Delete** — click the bin icon
+
+A group can carry a **language**, which is what the Trend by Language chart reads.
+It is optional: a group left unlabelled still appears in every total, it just has
+no language of its own to be counted under.
 
 A person can belong to one group **per meeting** — someone can be on the Sunday
 worship team and in a Friday small group, but not in two Friday groups. People
 already taken for the meeting you picked are greyed out with the group that holds
 them.
+
+### Managing Languages — super user; deleting is admin only
+
+The **Languages** tab holds the list a group's language is chosen from, seeded with
+English, Chinese and Korean. Add whatever else your congregation meets in — the
+three are a starting point, not a fixed set. A language still set on a group cannot
+be deleted; change those groups over first.
 
 ### Managing People — super user or admin
 
