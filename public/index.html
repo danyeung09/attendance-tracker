@@ -63,15 +63,16 @@
         attendanceSaved: '✓ Attendance Saved',
         errSaving: e => 'Error saving: ' + e,
         chartPresentTip: ctx => ` ${ctx.dataset.label}: ${ctx.parsed.y} present`,
-        chartPresentLabel: 'Present',
-        chartAbsentLabel: 'Absent',
         attendanceHistory: 'Attendance History',
         allMeetings: 'All Meetings',
         allLanguages: 'All Languages',
         noRecords: 'No attendance records found.',
-        attendanceTrend: 'Attendance Trend',
-        byGroup: 'By Group',
-        selectGroups: 'Select groups…',
+        trendByLanguage: 'Trend by Language',
+        trendByGroup: 'Trend by Group',
+        allMeetingsDefault: 'All meetings',
+        sessionsHeading: 'Sessions',
+        allLanguagesDefault: 'All languages',
+        noLanguagesYet: 'No group has a language yet — set one in Manage › Groups to chart by language.',
         noTrendGroups: 'No groups are set up for this chart yet.',
         noTrendSessions: 'Nothing recorded yet for this selection — try another language, or another meeting above.',
         allGroupsDefault: 'All groups',
@@ -270,15 +271,16 @@
         attendanceSaved: '✓ 出席已儲存',
         errSaving: e => '儲存錯誤：' + e,
         chartPresentTip: ctx => ` ${ctx.dataset.label}: ${ctx.parsed.y} 出席`,
-        chartPresentLabel: '出席',
-        chartAbsentLabel: '缺席',
         attendanceHistory: '出席歷史',
         allMeetings: '所有聚會',
         allLanguages: '所有語言',
         noRecords: '找不到出席記錄。',
-        attendanceTrend: '出席趨勢',
-        byGroup: '按小組',
-        selectGroups: '選擇小組…',
+        trendByLanguage: '各語言出席趨勢',
+        trendByGroup: '各小組出席趨勢',
+        allMeetingsDefault: '所有聚會',
+        sessionsHeading: '聚會記錄',
+        allLanguagesDefault: '所有語言',
+        noLanguagesYet: '尚未有小組設定語言 — 請至管理 › 小組設定後，才能按語言檢視趨勢。',
         noTrendGroups: '尚未設定此圖表的小組。',
         noTrendSessions: '此選擇尚無記錄 — 請改選其他語言，或於上方改選其他聚會。',
         allGroupsDefault: '所有小組',
@@ -1432,55 +1434,55 @@
     const CHART_COLORS = ['#6366f1','#10b981','#f59e0b','#ef4444','#8b5cf6','#06b6d4'];
     const shortDate = (s) => new Date(s + 'T00:00:00').toLocaleDateString('en-US', { month:'short', day:'numeric' });
 
-    // `groups` is what gets totalled; `seriesLabels` is what that total is
-    // *called*. They differ whenever the selection above the chart is coarser
-    // than the groups underneath it — All Languages rolls up two languages, not
-    // four groups, and naming every group would bury that. Falls back to the
-    // group names when no labels are given.
-    const AttendanceChart = ({ data, groups, meetingId, presentTip, title, lang, seriesLabels }) => {
+    // ─── Trend chart ──────────────────────────────────────────────────────────
+    // One line per series, plotted by week — groups hold the same meeting on
+    // different weekdays, so a week, not a date, is the unit that lines their
+    // sessions up. A series is { label, groups }: whatever the picker above the
+    // chart is selecting by, be that a language or a group.
+    //
+    // `meetingIds` narrows which sessions count; empty means every meeting. A
+    // week a series held no session is a gap rather than a zero — zero would
+    // claim a session nobody turned up to.
+    const TrendChart = ({ data, series, meetingIds, presentTip, lang }) => {
       const canvasRef = useRef(null);
       const chartRef  = useRef(null);
 
-      const rollup = (seriesLabels && seriesLabels.length)
-        ? seriesLabels
-        : groups.map(g => localizedName(g, lang));
-      // Joined before it reaches the dep array: a fresh array every render
-      // would rebuild the chart on every render, the strings do not.
-      const rollupTip   = rollup.join(', ');
-      const rollupTitle = rollup.join(' + ');
-
-      // One combined line: the total present across every group passed in,
-      // per week. Groups hold the same meeting on different weekdays, so a
-      // week — not a date — is the unit that lines their sessions up into a
-      // single turnout figure. This is the shared "Overall Attendance Trend";
-      // per-group breakdowns live in the separate By Group section, not here.
-      // When a specific meeting is picked (not "all"), the trend narrows to
-      // that meeting's own records so it matches what the meeting filter implies.
       const { labels, datasets } = useMemo(() => {
-        const relevant = data.attendance.filter(a =>
-          groups.some(g => g.id === a.groupId) && (!meetingId || meetingId === 'all' || a.meetingId === meetingId));
-        const weeks = [...new Set(relevant.map(a => weekStart(a.date)))].sort();
+        const inScope = (a) => !meetingIds.length || meetingIds.includes(a.meetingId);
+        const forSeries = (sr) => data.attendance.filter(a => inScope(a) && sr.groups.some(g => g.id === a.groupId));
+        const everything = data.attendance.filter(a =>
+          inScope(a) && series.some(sr => sr.groups.some(g => g.id === a.groupId)));
+        const weeks = [...new Set(everything.map(a => weekStart(a.date)))].sort();
         if (!weeks.length) return { labels: [], datasets: [] };
-
-        const totals = weeks.map(week => relevant
-          .filter(a => weekStart(a.date) === week)
-          .reduce((sum, r) => sum + r.records.filter(x => x.present).length, 0));
 
         return {
           labels: weeks.map(w => weekLabel(w, lang)),
-          datasets: [{
-            label: rollupTip,
-            data: totals,
-            borderColor: CHART_COLORS[0],
-            backgroundColor: 'rgba(99,102,241,0.08)',
-            fill: true,
-            tension: 0.35,
-            pointRadius: 4,
-            pointHoverRadius: 6,
-            spanGaps: false,
-          }],
+          datasets: series.map((sr, i) => {
+            const recs  = forSeries(sr);
+            const color = CHART_COLORS[i % CHART_COLORS.length];
+            return {
+              label: sr.label,
+              data: weeks.map(w => {
+                const wk = recs.filter(a => weekStart(a.date) === w);
+                return wk.length ? wk.reduce((sum, r) => sum + r.records.filter(x => x.present).length, 0) : null;
+              }),
+              borderColor: color,
+              // A filled area under two overlapping lines hides the lower one,
+              // so only a lone series gets one.
+              backgroundColor: series.length === 1 ? 'rgba(99,102,241,0.08)' : color,
+              fill: series.length === 1,
+              tension: 0.35,
+              pointRadius: 4,
+              pointHoverRadius: 6,
+              spanGaps: false,
+            };
+          }),
         };
-      }, [data.attendance, groups, meetingId, lang, rollupTip]);
+      }, [data.attendance, series, meetingIds, lang]);
+
+      // Rebuilding the chart is keyed on the numbers it draws, not on the
+      // identity of the arrays holding them — those are rebuilt every render.
+      const signature = JSON.stringify([labels, datasets.map(d => [d.label, d.data])]);
 
       useEffect(() => {
         if (!canvasRef.current || !labels.length) return;
@@ -1515,14 +1517,12 @@
         });
 
         return () => { if (chartRef.current) { chartRef.current.destroy(); chartRef.current = null; } };
-      }, [labels, datasets, presentTip]);
+      }, [signature, presentTip]);
 
       if (!labels.length) return null;
 
       return (
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 mb-4">
-          {title && <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide">{title}</h2>}
-          <p className="text-xs text-gray-400 mb-3">{rollupTitle}</p>
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4">
           <canvas ref={canvasRef} />
         </div>
       );
@@ -1607,71 +1607,19 @@
       </span>
     );
 
-    // ─── Group Bar Chart ──────────────────────────────────────────────────────
-    const GroupBarChart = ({ group, meetingId, data, presentLabel, absentLabel, lang }) => {
-      const canvasRef = useRef(null);
-      const chartRef  = useRef(null);
-
-      const { labels, presentData, absentData } = useMemo(() => {
-        const recs  = data.attendance.filter(a => a.groupId === group.id && a.meetingId === meetingId);
-        const dates = [...recs.map(a => a.date)].sort();
-        return {
-          labels:      dates.map(shortDate),
-          presentData: dates.map(d => { const r = recs.find(a => a.date === d); return r ? r.records.filter(x => x.present).length : 0; }),
-          absentData:  dates.map(d => { const r = recs.find(a => a.date === d); return r ? r.records.filter(x => !x.present).length : 0; }),
-        };
-      }, [data.attendance, group.id, meetingId]);
-
-      useEffect(() => {
-        if (!canvasRef.current || !labels.length) return;
-        if (chartRef.current) { chartRef.current.destroy(); chartRef.current = null; }
-
-        chartRef.current = new Chart(canvasRef.current, {
-          type: 'bar',
-          data: {
-            labels,
-            datasets: [
-              { label: presentLabel, data:presentData, backgroundColor:'rgba(99,102,241,0.85)', borderRadius:4, stack:'s' },
-              { label: absentLabel,  data:absentData,  backgroundColor:'rgba(209,213,219,0.7)', borderRadius:4, stack:'s' },
-            ],
-          },
-          options: {
-            responsive: true,
-            plugins: {
-              legend: { position:'top', labels:{ boxWidth:10, font:{ size:11 } } },
-              tooltip: { callbacks: { label: ctx => ` ${ctx.dataset.label}: ${ctx.parsed.y}` } },
-            },
-            scales: {
-              x: { stacked:true, grid:{ display:false }, ticks:{ font:{ size:10 } } },
-              y: { stacked:true, beginAtZero:true, ticks:{ stepSize:1, font:{ size:10 } }, grid:{ color:'rgba(0,0,0,0.04)' } },
-            },
-          },
-        });
-
-        return () => { if (chartRef.current) { chartRef.current.destroy(); chartRef.current = null; } };
-      }, [labels, presentData, absentData, presentLabel, absentLabel]);
-
-      if (!labels.length) return null;
-
-      const meeting = data.meetings.find(m => m.id === meetingId);
-      return (
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4">
-          <p className="font-semibold text-gray-800 text-sm">{localizedName(group, lang)}</p>
-          <p className="text-xs text-gray-400 mb-2">{meeting ? localizedName(meeting, lang) : ''}</p>
-          <canvas ref={canvasRef} />
-        </div>
-      );
-    };
-
     // ─── History View ─────────────────────────────────────────────────────────
     const HistoryView = () => {
       const { data, loading, t, lang, canManage, refresh, trendGroupIds, toggleTrendGroup, breakGlass, memberSort } = useApp();
       const [filter, setFilter] = useState(null);   // null = default to Small Group Meeting until user picks
       const [expanded, setExpanded] = useState(() => new Set());
       const [dateOverrides, setDateOverrides] = useState(() => new Set());
-      const [selectedGroupIds, setSelectedGroupIds] = useState(null);   // null = default (first group only)
-      const [chartMeetingId, setChartMeetingId] = useState(null);   // null = default to the first meeting with chartable groups
-      const [trendLanguage, setTrendLanguage] = useState('all');   // 'all', a language id, or 'none' for groups with no language set
+      // Two trends, each with its own pickers. An empty selection means "all
+      // of them" throughout — the chart is useful before anything is set up,
+      // and narrowing is the deliberate act.
+      const [langChartMeetings,  setLangChartMeetings]  = useState([]);   // [] = every meeting
+      const [langChartLanguages, setLangChartLanguages] = useState([]);   // [] = every language
+      const [groupChartMeetings, setGroupChartMeetings] = useState([]);
+      const [groupChartLocal,    setGroupChartLocal]    = useState(null); // used when the account cannot save a preference
       const [editingDate, setEditingDate] = useState(null);   // { id, date } of the session whose date is being corrected
       const [savingDate,  setSavingDate]  = useState(false);
       if (loading) return <Spinner />;
@@ -1732,106 +1680,93 @@
       }, {});
       const isDefaultOpen = (date) => byDate[date].every(rec => latestDateByMeeting[rec.meetingId] === date);
 
-      const chartGroups = (activeFilter === 'all' ? data.groups : data.groups.filter(g => g.meetingIds.includes(activeFilter)))
-        .filter(g => data.attendance.some(a => a.groupId === g.id));
+      // -- The two trends --
+      // Both read the same way: pick the meetings that count, then pick what to
+      // break them down by. Neither obeys the meeting filter at the top of the
+      // page - that one governs the session list below, and a chart you can
+      // point at several meetings at once has no use for it.
 
-      // The Overall Attendance Trend reads by language first: pick a language
-      // and you get that language's turnout as one total, with no setting up.
-      // The group picker is the finer cut *within* whatever language is
-      // showing — reach for it only when you want part of a language rather
-      // than the whole of it. Both still narrow to the top meeting filter,
-      // same as the rest of the History page.
+      // Empty selection means every one of them, so both charts draw something
+      // the moment the page opens.
+      const chosen = (ids, all) => (ids.length ? all.filter(x => ids.includes(x.id)) : all);
+      const toggleIn = (setter) => (id) =>
+        setter(prev => ((prev || []).includes(id) ? prev.filter(x => x !== id) : [...(prev || []), id]));
+
+      // Both charts are of history, so a language or group with no session
+      // behind it has no line to draw. Dropped from the pickers when it has
+      // never been recorded at all, and from the chart when it has nothing
+      // under the meetings currently selected — otherwise it would sit in the
+      // legend as a line of gaps. Meetings are not filtered this way: they
+      // scope the chart rather than draw on it, and "nothing recorded for this
+      // meeting" is an answer worth being able to ask for.
+      const hasSessions = (groups, meetingIds) => data.attendance.some(a =>
+        (!meetingIds || !meetingIds.length || meetingIds.includes(a.meetingId)) &&
+        groups.some(g => g.id === a.groupId));
+
+      // Chart 1 breaks down by language, and has no group dimension at all.
+      // Every language some group belongs to is offered, plus "No language set"
+      // once anything is labelled - otherwise unlabelled groups would be
+      // charted under a heading that does not exist.
+      const languageOptions = (() => {
+        const inUse = (id) => hasSessions(data.groups.filter(g => (g.languageId || 'none') === id));
+        const labelled = data.languages.filter(l => inUse(l.id));
+        if (!labelled.length) return [];
+        const none = { id: 'none', name: { en: t.noLanguageSet, zh: t.noLanguageSet } };
+        return inUse('none') ? [...labelled, none] : labelled;
+      })();
+
+      const langChartSeries = chosen(langChartLanguages, languageOptions)
+        .map(o => ({
+          id: o.id,
+          label: localizedName(o, lang),
+          groups: data.groups.filter(g => (g.languageId || 'none') === o.id),
+        }))
+        .filter(sr => hasSessions(sr.groups, langChartMeetings));
+
+      // Chart 2 breaks down by group, one line each. Which groups are picked is
+      // the personal preference already saved against the account; anyone
+      // without one to save against (a viewer, or a break-glass admin) still
+      // gets to choose, just for as long as they are on the page.
+      const canSaveGroupPick = canManage && !breakGlass;
+      const groupChartIds    = canSaveGroupPick ? trendGroupIds : (groupChartLocal || []);
+      const toggleGroupChart = canSaveGroupPick ? toggleTrendGroup : toggleIn(setGroupChartLocal);
+      const groupChartOptions = data.groups.filter(g => hasSessions([g]));
+      const groupChartSeries = chosen(groupChartIds, groupChartOptions)
+        .map(g => ({ id: g.id, label: localizedName(g, lang), groups: [g] }))
+        .filter(sr => hasSessions(sr.groups, groupChartMeetings));
+
+      // A chart with nothing left to draw renders no canvas at all, so the
+      // panel has to say so rather than silently collapsing.
+      const seriesHaveSessions = (series) => series.length > 0;
+
+      // What a chart's export says it is of, written across the top of the
+      // sheet so a saved file still names its scope away from the app.
+      const scopeLabel = (ids, series, allLabel) =>
+        ids.length ? series.map(sr => sr.label).join(', ') : allLabel;
+
+      // One column per meeting, a row per week, under a heading naming the
+      // scope. Weeks rather than dates, because groups hold the same meeting on
+      // different weekdays. No Total across the columns: the same person
+      // attends the Lord's Day meeting *and* a small group, so adding meetings
+      // together would count them twice.
       //
-      // Every language that some group actually belongs to is offered, whether
-      // or not this user has picked any of its groups — the language is the
-      // starting point, so it can't be gated on group picks. "No language set"
-      // joins the list once something is labelled, so unlabelled groups stay
-      // reachable instead of only ever appearing under All Languages.
-      const labelledLanguages = data.languages.filter(l => data.groups.some(g => g.languageId === l.id));
-      const trendLanguageOptions = labelledLanguages.length === 0 ? [] : [
-        ...labelledLanguages.map(l => ({ id: l.id, label: localizedName(l, lang) })),
-        ...(data.groups.some(g => !g.languageId) ? [{ id: 'none', label: t.noLanguageSet }] : []),
-      ];
-      // Relabelling the last group of a language would otherwise strand the
-      // selector on a choice that no longer exists.
-      const activeTrendLanguage = trendLanguageOptions.some(o => o.id === trendLanguage) ? trendLanguage : 'all';
-
-      // What the chosen language puts in play, and what the picker may cut down.
-      const languageGroups = activeTrendLanguage === 'all'
-        ? data.groups
-        : data.groups.filter(g => (g.languageId || 'none') === activeTrendLanguage);
-
-      // A saved group pick only counts while it falls inside the language on
-      // screen, so switching language shows that whole language rather than an
-      // empty chart. No applicable pick means the default: all of it.
-      const pickedTrendGroups = languageGroups.filter(g => trendGroupIds.includes(g.id));
-      const trendGroups = pickedTrendGroups.length ? pickedTrendGroups : languageGroups;
-
-      // The chart draws nothing when its groups have no session under the
-      // meeting filter on screen — a real possibility now that choosing a
-      // language selects its groups for you, and a silently missing panel
-      // reads as a bug. Same test the chart itself applies.
-      const hasSessions = (groups) => data.attendance.some(a =>
-        groups.some(g => g.id === a.groupId) && (activeFilter === 'all' || a.meetingId === activeFilter));
-      const trendHasSessions = hasSessions(trendGroups);
-
-      // What the trend is broken down by — the CSV's columns, and the names the
-      // chart puts on the total it plots. Pick groups and you asked for those
-      // groups, so they are the breakdown. Pick none and the selection *is* the
-      // language: one entry for the language you are looking at, or one per
-      // language under All Languages, rather than the groups that happen to sit
-      // inside it. With nothing labelled at all there is no language axis to
-      // use, so groups remain the only sensible breakdown.
-      //
-      // Anything with no session under the current meeting filter drops out
-      // here: as a CSV column it would be blanks all the way down, and in the
-      // chart's caption it would credit a language that contributed nothing.
-      const inLanguage = (groups, id) => groups.filter(g => (g.languageId || 'none') === id);
-      const trendSeries = (
-        pickedTrendGroups.length || trendLanguageOptions.length === 0
-          ? trendGroups.map(g => ({ label: localizedName(g, lang), groups: [g] }))
-        : activeTrendLanguage === 'all'
-          ? trendLanguageOptions.map(o => ({ label: o.label, groups: inLanguage(languageGroups, o.id) }))
-          : [{ label: trendLanguageOptions.find(o => o.id === activeTrendLanguage).label, groups: trendGroups }]
-      ).filter(sr => hasSessions(sr.groups));
-
-      // What the sheet is *of*, written across the top so a saved file still
-      // says what it was scoped to once it is away from the app. The language
-      // selection, plus the groups if the picker has narrowed it further.
-      const trendScopeLabel = [
-        activeTrendLanguage === 'all'
-          ? t.allLanguages
-          : (trendLanguageOptions.find(o => o.id === activeTrendLanguage)?.label || t.allLanguages),
-        ...(pickedTrendGroups.length ? [pickedTrendGroups.map(g => localizedName(g, lang)).join(', ')] : []),
-      ].join(' — ');
-
-      // One column per series (see trendSeries) plus a combined Total, one row
-      // per week — the same figures the chart above plots, just laid out for a
-      // spreadsheet. A lone series needs no Total column: it would repeat the
-      // one column beside it. Weeks, not dates, because groups meet on
-      // different weekdays (see weekStart). Followed by a per-member detail
-      // table (group + name, not shown on the chart itself): one row per
-      // group+member, one column per week, so the same week's attendance lines
-      // up side by side instead of repeating rows. The detail stays per group
-      // whatever the summary breaks down by — that is where a reader goes to
-      // see which groups make up a language's figure.
-      const exportTrendCsv = () => {
+      // `withDetail` adds a per-member table underneath - one row per
+      // group+member, one column per week. Only the group chart gets it; the
+      // language chart is explicitly free of group information.
+      const buildTrendCsv = ({ scope, series, meetingIds, withDetail }) => {
+        const groups   = series.flatMap(sr => sr.groups);
         const relevant = data.attendance.filter(a =>
-          trendGroups.some(g => g.id === a.groupId) && (activeFilter === 'all' || a.meetingId === activeFilter));
-        const weeks = [...new Set(relevant.map(a => weekStart(a.date)))].sort();
-        const inWeek = (week) => relevant.filter(a => weekStart(a.date) === week);
+          groups.some(g => g.id === a.groupId) && (!meetingIds.length || meetingIds.includes(a.meetingId)));
+        const weeks     = [...new Set(relevant.map(a => weekStart(a.date)))].sort();
+        const inWeek    = (week) => relevant.filter(a => weekStart(a.date) === week);
         const presentIn = (recs) => recs.reduce((sum, r) => sum + r.records.filter(x => x.present).length, 0);
 
-        // A meeting per column, so one sheet answers "how did each meeting do,
-        // week by week" for whatever is selected above the chart. Under a
-        // single meeting filter that is one column. A meeting with nothing
-        // recorded is left out rather than carried as a column of blanks.
-        const columns = (activeFilter === 'all' ? data.meetings : data.meetings.filter(m => m.id === activeFilter))
+        // A meeting with nothing recorded is left out rather than carried as a
+        // column of blanks; a week one did not sit stays blank, since 0 would
+        // claim a session nobody came to.
+        const columns = (meetingIds.length ? data.meetings.filter(m => meetingIds.includes(m.id)) : data.meetings)
           .filter(m => relevant.some(a => a.meetingId === m.id));
 
-        // No Total across the columns: the same person attends the Lord's Day
-        // meeting *and* a small group, so adding meetings together counts them
-        // twice. The chart's single line is the combined figure.
         const header = ['Week of', ...columns.map(m => localizedName(m, lang))];
         const rows = weeks.map(week => {
           const wk = inWeek(week);
@@ -1841,32 +1776,30 @@
           })];
         });
 
-        const personName = (personId) => {
-          const p = data.people.find(x => x.id === personId);
-          return p ? `${p.firstName} ${p.lastName}`.trim() : '';
-        };
+        const body = [[scope], header, ...rows];
+        if (!withDetail) return body;
+
+        const person     = (id) => data.people.find(x => x.id === id);
+        const personName = (id) => { const pp = person(id); return pp ? (pp.firstName + ' ' + pp.lastName).trim() : ''; };
 
         const memberKeys = [];
-        const seenKeys = new Set();
-        relevant.forEach(rec => {
-          rec.records.forEach(r => {
-            const key = `${rec.groupId}|${r.personId}`;
-            if (!seenKeys.has(key)) { seenKeys.add(key); memberKeys.push({ groupId: rec.groupId, personId: r.personId }); }
-          });
-        });
-        const person = (personId) => data.people.find(x => x.id === personId);
+        const seen = new Set();
+        relevant.forEach(rec => rec.records.forEach(r => {
+          const key = rec.groupId + '|' + r.personId;
+          if (!seen.has(key)) { seen.add(key); memberKeys.push({ groupId: rec.groupId, personId: r.personId }); }
+        }));
         memberKeys.sort((a, b) => {
-          const ga = localizedName(trendGroups.find(g => g.id === a.groupId), lang);
-          const gb = localizedName(trendGroups.find(g => g.id === b.groupId), lang);
+          const ga = localizedName(groups.find(g => g.id === a.groupId), lang);
+          const gb = localizedName(groups.find(g => g.id === b.groupId), lang);
           return ga !== gb ? ga.localeCompare(gb) : nameComparator(memberSort)(person(a.personId), person(b.personId));
         });
 
         // A week can hold more than one session for a member (several meetings
-        // under "All Meetings"), so the cell answers "did they turn up at all
-        // that week?" — Yes beats No, and blank means nothing was recorded.
+        // at once), so the cell answers "did they turn up at all that week?" -
+        // Yes beats No, and blank means nothing was recorded.
         const detailHeader = ['Group', 'Name', ...weeks.map(w => fmtDateNumeric(w, t.locale))];
         const detailRows = memberKeys.map(({ groupId, personId }) => {
-          const group = trendGroups.find(g => g.id === groupId);
+          const group = groups.find(g => g.id === groupId);
           const perWeek = weeks.map(week => {
             const marks = inWeek(week)
               .filter(a => a.groupId === groupId)
@@ -1878,32 +1811,18 @@
           return [group ? localizedName(group, lang) : '', personName(personId), ...perWeek];
         });
 
-        downloadCSV(`overall-attendance-trend-${todayStr()}.csv`,
-          [[trendScopeLabel], header, ...rows, [], detailHeader, ...detailRows]);
+        return [...body, [], detailHeader, ...detailRows];
       };
 
-      // Group trends are shown for one meeting at a time, picked from a
-      // dropdown, so an "All meetings" view doesn't dump every meeting's
-      // group charts on screen at once.
-      const meetingSections = data.meetings
-        .map(m => ({ meeting: m, groups: chartGroups.filter(g => g.meetingIds.includes(m.id)) }))
-        .filter(s => s.groups.length > 0);
-      const activeChartMeetingId = meetingSections.some(s => s.meeting.id === chartMeetingId)
-        ? chartMeetingId
-        : meetingSections[0]?.meeting.id;
-      const activeSection = meetingSections.find(s => s.meeting.id === activeChartMeetingId);
-      const selectChartMeeting = (id) => { setChartMeetingId(id); setSelectedGroupIds(null); };
+      const exportLangCsv = () => downloadCSV('attendance-trend-by-language-' + todayStr() + '.csv', buildTrendCsv({
+        scope: scopeLabel(langChartLanguages, langChartSeries, t.allLanguages),
+        series: langChartSeries, meetingIds: langChartMeetings, withDetail: false,
+      }));
 
-      // Only the groups the user has picked show a chart; defaults to the
-      // section's first group so the panel doesn't dump every group's chart
-      // at once.
-      const defaultGroupIds = new Set(activeSection ? [activeSection.groups[0].id] : []);
-      const activeGroupIds = selectedGroupIds ?? defaultGroupIds;
-      const toggleGroupSelected = (id) => {
-        const next = new Set(selectedGroupIds ?? defaultGroupIds);
-        if (next.has(id)) next.delete(id); else next.add(id);
-        setSelectedGroupIds(next);
-      };
+      const exportGroupCsv = () => downloadCSV('attendance-trend-by-group-' + todayStr() + '.csv', buildTrendCsv({
+        scope: scopeLabel(groupChartIds, groupChartSeries, t.allGroupsDefault),
+        series: groupChartSeries, meetingIds: groupChartMeetings, withDetail: true,
+      }));
 
       const empty = (
         <div className="bg-white rounded-2xl p-10 text-center border border-gray-100 shadow-sm text-gray-400">
@@ -1915,63 +1834,77 @@
         <div className="max-w-screen-xl mx-auto px-4 py-6">
           <h1 className="text-2xl font-bold text-gray-800 mb-4">{t.attendanceHistory}</h1>
 
-          <select value={activeFilter} onChange={e => setFilter(e.target.value)}
-            className="border border-gray-300 rounded-xl px-3 py-2 text-sm mb-4 focus:outline-none focus:ring-2 focus:ring-indigo-400 bg-white shadow-sm" style={{width:'280px'}}>
-            <option value="all">{t.allMeetings}</option>
-            {data.meetings.map(m => <option key={m.id} value={m.id}>{localizedName(m, lang)}</option>)}
-          </select>
+          {/* Two trends, side by side. One breaks down by language and offers
+              no group dimension at all; the other breaks down by group. Each
+              carries its own meeting picker and can span several meetings, so
+              neither follows the single-meeting filter above - that one governs
+              the session list, which is why they sit outside its empty check. */}
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 mb-6">
+            <div>
+              <div className="px-1 mb-2">
+                <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">{t.trendByLanguage}</h2>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <MultiSelectDropdown options={data.meetings} selectedIds={new Set(langChartMeetings)}
+                    onToggle={toggleIn(setLangChartMeetings)} lang={lang} placeholder={t.allMeetingsDefault} />
+                  {languageOptions.length > 0 && (
+                    <MultiSelectDropdown options={languageOptions} selectedIds={new Set(langChartLanguages)}
+                      onToggle={toggleIn(setLangChartLanguages)} lang={lang} placeholder={t.allLanguagesDefault} />
+                  )}
+                  {seriesHaveSessions(langChartSeries) && (
+                    <button type="button" onClick={exportLangCsv} className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg border border-gray-300 bg-white text-gray-600 hover:border-indigo-400 hover:text-indigo-600">
+                      <I.Download /> {t.exportCsv}
+                    </button>
+                  )}
+                </div>
+              </div>
+              {seriesHaveSessions(langChartSeries) ? (
+                <TrendChart data={data} series={langChartSeries} meetingIds={langChartMeetings}
+                  presentTip={t.chartPresentTip} lang={lang} />
+              ) : (
+                <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4">
+                  <p className="text-sm text-gray-400">{languageOptions.length === 0 ? t.noLanguagesYet : t.noTrendSessions}</p>
+                </div>
+              )}
+            </div>
+            <div>
+              <div className="px-1 mb-2">
+                <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">{t.trendByGroup}</h2>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <MultiSelectDropdown options={data.meetings} selectedIds={new Set(groupChartMeetings)}
+                    onToggle={toggleIn(setGroupChartMeetings)} lang={lang} placeholder={t.allMeetingsDefault} />
+                  {groupChartOptions.length > 0 && (
+                    <MultiSelectDropdown options={groupChartOptions} selectedIds={new Set(groupChartIds)}
+                      onToggle={toggleGroupChart} lang={lang} placeholder={t.allGroupsDefault} />
+                  )}
+                  {seriesHaveSessions(groupChartSeries) && (
+                    <button type="button" onClick={exportGroupCsv} className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg border border-gray-300 bg-white text-gray-600 hover:border-indigo-400 hover:text-indigo-600">
+                      <I.Download /> {t.exportCsv}
+                    </button>
+                  )}
+                </div>
+              </div>
+              {seriesHaveSessions(groupChartSeries) ? (
+                <TrendChart data={data} series={groupChartSeries} meetingIds={groupChartMeetings}
+                  presentTip={t.chartPresentTip} lang={lang} />
+              ) : (
+                <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4">
+                  <p className="text-sm text-gray-400">{groupChartOptions.length === 0 ? t.noTrendGroups : t.noTrendSessions}</p>
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3 px-1 mb-3">
+            <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">{t.sessionsHeading}</h2>
+            <select value={activeFilter} onChange={e => setFilter(e.target.value)}
+              className="border border-gray-300 rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-400 bg-white">
+              <option value="all">{t.allMeetings}</option>
+              {data.meetings.map(m => <option key={m.id} value={m.id}>{localizedName(m, lang)}</option>)}
+            </select>
+          </div>
 
           {filtered.length === 0 ? empty : (
-            <>
-              {/* ── Overall Attendance Trend: full width, above everything else.
-                  Selected by language, optionally narrowed to some of that
-                  language's groups, and combined into one total. Separate from
-                  — and independent of — the per-group charts below, which plot
-                  one group each rather than a combined figure. */}
-              <div className="mb-6">
-                <div className="flex items-center justify-between gap-2 px-1 mb-2">
-                  <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">{t.attendanceTrend}</h2>
-                  <div className="flex items-center gap-2">
-                    {/* Language leads: it needs nothing set up, and it is a lens
-                        on the chart rather than a saved preference, so everyone
-                        gets it — including a break-glass admin with no account. */}
-                    {trendLanguageOptions.length > 0 && (
-                      <select value={activeTrendLanguage} onChange={e => setTrendLanguage(e.target.value)}
-                        className="text-xs font-medium px-3 py-1.5 rounded-lg border border-gray-300 bg-white text-gray-700 hover:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-400">
-                        <option value="all">{t.allLanguages}</option>
-                        {trendLanguageOptions.map(o => <option key={o.id} value={o.id}>{o.label}</option>)}
-                      </select>
-                    )}
-                    {/* Then the finer cut, offering only what the language holds.
-                        Picking nothing is the default — the whole language. */}
-                    {canManage && !breakGlass && languageGroups.length > 0 && (
-                      <MultiSelectDropdown options={languageGroups} selectedIds={new Set(trendGroupIds)}
-                        onToggle={toggleTrendGroup} lang={lang} placeholder={t.allGroupsDefault} />
-                    )}
-                    {trendGroups.length > 0 && trendHasSessions && (
-                      <button type="button" onClick={exportTrendCsv}
-                        className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg border border-gray-300 bg-white text-gray-600 hover:border-indigo-400 hover:text-indigo-600">
-                        <I.Download /> {t.exportCsv}
-                      </button>
-                    )}
-                  </div>
-                </div>
-                {trendGroups.length > 0 && trendHasSessions ? (
-                  <AttendanceChart data={data} groups={trendGroups} meetingId={activeFilter} presentTip={t.chartPresentTip}
-                    title="" lang={lang} seriesLabels={trendSeries.map(sr => sr.label)} />
-                ) : (
-                  <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4">
-                    <p className="text-sm text-gray-400">
-                      {trendGroups.length === 0 ? t.noTrendGroups : t.noTrendSessions}
-                    </p>
-                  </div>
-                )}
-              </div>
-
-            <div className="flex gap-6 items-start">
-
-              {/* ── Left: attendance list ── */}
-              <div className="w-1/2 min-w-0 space-y-5">
+            <div className="space-y-5">
                 {sortedDates.length === 0 ? empty : sortedDates.map(date => {
                   const dateOpen = isDefaultOpen(date) !== dateOverrides.has(date);
                   return (
@@ -2060,37 +1993,7 @@
                   </div>
                   );
                 })}
-              </div>
-
-              {/* ── Right: By Group ── */}
-              <div className="w-1/2 min-w-0 space-y-4">
-                {activeSection && (
-                  <>
-                    <div className="flex items-center justify-between gap-2 px-1">
-                      <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">{t.byGroup}</h2>
-                      <div className="flex items-center gap-2">
-                        {meetingSections.length > 1 && (
-                          <select value={activeChartMeetingId} onChange={e => selectChartMeeting(e.target.value)}
-                            className="border border-gray-300 rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-400 bg-white">
-                            {meetingSections.map(s => (
-                              <option key={s.meeting.id} value={s.meeting.id}>{localizedName(s.meeting, lang)}</option>
-                            ))}
-                          </select>
-                        )}
-                        <MultiSelectDropdown options={activeSection.groups} selectedIds={activeGroupIds}
-                          onToggle={toggleGroupSelected} lang={lang} placeholder={t.selectGroups} />
-                      </div>
-                    </div>
-                    {activeSection.groups.filter(g => activeGroupIds.has(g.id)).map(g => (
-                      <GroupBarChart key={g.id} group={g} meetingId={activeChartMeetingId} data={data}
-                        presentLabel={t.chartPresentLabel} absentLabel={t.chartAbsentLabel} lang={lang} />
-                    ))}
-                  </>
-                )}
-              </div>
-
             </div>
-            </>
           )}
         </div>
       );
