@@ -1730,13 +1730,19 @@
         return inUse('none') ? [...labelled, none] : labelled;
       })();
 
-      const langChartSeries = chosen(langChartLanguages, languageOptions)
-        .map(o => ({
-          id: o.id,
-          label: localizedName(o, lang),
-          groups: data.groups.filter(g => (g.languageId || 'none') === o.id),
-        }))
-        .filter(sr => hasSessions(sr.groups, langChartMeetings));
+      // Splitting into lines is what picking languages *asks for*. With none
+      // picked the question is the congregation as a whole, so that is one
+      // line over everything - including groups nobody has labelled yet, which
+      // are part of the total even though they are under no language.
+      const langChartSeries = (
+        langChartLanguages.length
+          ? chosen(langChartLanguages, languageOptions).map(o => ({
+              id: o.id,
+              label: localizedName(o, lang),
+              groups: data.groups.filter(g => (g.languageId || 'none') === o.id),
+            }))
+          : [{ id: 'all', label: t.allLanguagesDefault, groups: data.groups }]
+      ).filter(sr => hasSessions(sr.groups, langChartMeetings));
 
       // Chart 2 breaks down by group, one line each. Which groups are picked is
       // the personal preference already saved against the account; anyone
