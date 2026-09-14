@@ -73,9 +73,8 @@
         byGroup: 'By Group',
         selectGroups: 'Select groups…',
         noTrendGroups: 'No groups are set up for this chart yet.',
-        noTrendGroupsHint: 'Pick groups above to build your Overall Attendance Trend.',
-        noTrendGroupsBreakGlass: 'This is a personal preference tied to an account. Sign in with your own admin account (not the break-glass password) to set up your Overall Attendance Trend.',
-        noTrendGroupsInLanguage: language => `None of the groups you picked are ${language} groups. Choose another language, or add one of its groups above.`,
+        noTrendSessions: 'Nothing recorded yet for this selection — try another language, or another meeting above.',
+        allGroupsDefault: 'All groups',
         exportCsv: 'Export CSV',
         adminPasswordPh: 'Admin password',
         login: 'Sign In',
@@ -281,9 +280,8 @@
         byGroup: '按小組',
         selectGroups: '選擇小組…',
         noTrendGroups: '尚未設定此圖表的小組。',
-        noTrendGroupsHint: '請在上方選擇小組，建立您自己的整體出席趨勢。',
-        noTrendGroupsBreakGlass: '此為與帳號綁定的個人偏好設定。請使用您自己的管理員帳號（而非救援密碼）登入，以設定您的整體出席趨勢。',
-        noTrendGroupsInLanguage: language => `您所選的小組中沒有${language}的小組。請改選其他語言，或於上方加入該語言的小組。`,
+        noTrendSessions: '此選擇尚無記錄 — 請改選其他語言，或於上方改選其他聚會。',
+        allGroupsDefault: '所有小組',
         exportCsv: '匯出 CSV',
         adminPasswordPh: '管理員密碼',
         login: '登入',
@@ -1718,28 +1716,44 @@
       const chartGroups = (activeFilter === 'all' ? data.groups : data.groups.filter(g => g.meetingIds.includes(activeFilter)))
         .filter(g => data.attendance.some(a => a.groupId === g.id));
 
-      // The Overall Attendance Trend is this signed-in super/admin's own pick
-      // of groups, combined into one total — independent of the By Group
-      // picker below, since it's meant to stay stable across visits rather
-      // than reset per session. It still narrows to the top meeting filter,
+      // The Overall Attendance Trend reads by language first: pick a language
+      // and you get that language's turnout as one total, with no setting up.
+      // The group picker is the finer cut *within* whatever language is
+      // showing — reach for it only when you want part of a language rather
+      // than the whole of it. Both still narrow to the top meeting filter,
       // same as the rest of the History page.
-      const pickedTrendGroups = data.groups.filter(g => trendGroupIds.includes(g.id));
-
-      // The trend can be read one language at a time. Only the languages the
-      // picked groups actually use are offered, so the dropdown never lists a
-      // choice that would plot nothing — plus "No language" when some of them
-      // haven't been labelled, since those show up under no language at all.
-      const trendLanguageOptions = [
-        ...data.languages.filter(l => pickedTrendGroups.some(g => g.languageId === l.id))
-          .map(l => ({ id: l.id, label: localizedName(l, lang) })),
-        ...(pickedTrendGroups.some(g => !g.languageId) ? [{ id: 'none', label: t.noLanguageSet }] : []),
+      //
+      // Every language that some group actually belongs to is offered, whether
+      // or not this user has picked any of its groups — the language is the
+      // starting point, so it can't be gated on group picks. "No language set"
+      // joins the list once something is labelled, so unlabelled groups stay
+      // reachable instead of only ever appearing under All Languages.
+      const labelledLanguages = data.languages.filter(l => data.groups.some(g => g.languageId === l.id));
+      const trendLanguageOptions = labelledLanguages.length === 0 ? [] : [
+        ...labelledLanguages.map(l => ({ id: l.id, label: localizedName(l, lang) })),
+        ...(data.groups.some(g => !g.languageId) ? [{ id: 'none', label: t.noLanguageSet }] : []),
       ];
-      // Deselecting the last group of a language would otherwise strand the
-      // filter on a choice that no longer exists.
+      // Relabelling the last group of a language would otherwise strand the
+      // selector on a choice that no longer exists.
       const activeTrendLanguage = trendLanguageOptions.some(o => o.id === trendLanguage) ? trendLanguage : 'all';
-      const trendGroups = activeTrendLanguage === 'all'
-        ? pickedTrendGroups
-        : pickedTrendGroups.filter(g => (g.languageId || 'none') === activeTrendLanguage);
+
+      // What the chosen language puts in play, and what the picker may cut down.
+      const languageGroups = activeTrendLanguage === 'all'
+        ? data.groups
+        : data.groups.filter(g => (g.languageId || 'none') === activeTrendLanguage);
+
+      // A saved group pick only counts while it falls inside the language on
+      // screen, so switching language shows that whole language rather than an
+      // empty chart. No applicable pick means the default: all of it.
+      const pickedTrendGroups = languageGroups.filter(g => trendGroupIds.includes(g.id));
+      const trendGroups = pickedTrendGroups.length ? pickedTrendGroups : languageGroups;
+
+      // The chart draws nothing when its groups have no session under the
+      // meeting filter on screen — a real possibility now that choosing a
+      // language selects its groups for you, and a silently missing panel
+      // reads as a bug. Same test the chart itself applies.
+      const trendHasSessions = data.attendance.some(a =>
+        trendGroups.some(g => g.id === a.groupId) && (activeFilter === 'all' || a.meetingId === activeFilter));
 
       // One column per trend group plus a combined Total, one row per week —
       // the same figures the chart above plots, just laid out for a spreadsheet.
@@ -1849,42 +1863,44 @@
           {filtered.length === 0 ? empty : (
             <>
               {/* ── Overall Attendance Trend: full width, above everything else.
-                  This signed-in super/admin's own pick of groups, combined into
-                  one total. Separate from — and independent of — the free-form
-                  By Group picker below, which anyone can adjust at any time. */}
+                  Selected by language, optionally narrowed to some of that
+                  language's groups, and combined into one total. Separate from
+                  — and independent of — the per-group charts below, which plot
+                  one group each rather than a combined figure. */}
               <div className="mb-6">
                 <div className="flex items-center justify-between gap-2 px-1 mb-2">
                   <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">{t.attendanceTrend}</h2>
                   <div className="flex items-center gap-2">
-                    {trendGroups.length > 0 && (
-                      <button type="button" onClick={exportTrendCsv}
-                        className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg border border-gray-300 bg-white text-gray-600 hover:border-indigo-400 hover:text-indigo-600">
-                        <I.Download /> {t.exportCsv}
-                      </button>
-                    )}
-                    {/* Just a lens on the chart, so everyone gets it — unlike the
-                        group picker, which edits a saved personal preference. */}
-                    {trendLanguageOptions.length > 1 && (
+                    {/* Language leads: it needs nothing set up, and it is a lens
+                        on the chart rather than a saved preference, so everyone
+                        gets it — including a break-glass admin with no account. */}
+                    {trendLanguageOptions.length > 0 && (
                       <select value={activeTrendLanguage} onChange={e => setTrendLanguage(e.target.value)}
                         className="text-xs font-medium px-3 py-1.5 rounded-lg border border-gray-300 bg-white text-gray-700 hover:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-400">
                         <option value="all">{t.allLanguages}</option>
                         {trendLanguageOptions.map(o => <option key={o.id} value={o.id}>{o.label}</option>)}
                       </select>
                     )}
-                    {canManage && !breakGlass && (
-                      <MultiSelectDropdown options={data.groups} selectedIds={new Set(trendGroupIds)}
-                        onToggle={toggleTrendGroup} lang={lang} placeholder={t.selectGroups} />
+                    {/* Then the finer cut, offering only what the language holds.
+                        Picking nothing is the default — the whole language. */}
+                    {canManage && !breakGlass && languageGroups.length > 0 && (
+                      <MultiSelectDropdown options={languageGroups} selectedIds={new Set(trendGroupIds)}
+                        onToggle={toggleTrendGroup} lang={lang} placeholder={t.allGroupsDefault} />
+                    )}
+                    {trendGroups.length > 0 && (
+                      <button type="button" onClick={exportTrendCsv}
+                        className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg border border-gray-300 bg-white text-gray-600 hover:border-indigo-400 hover:text-indigo-600">
+                        <I.Download /> {t.exportCsv}
+                      </button>
                     )}
                   </div>
                 </div>
-                {trendGroups.length > 0 ? (
+                {trendGroups.length > 0 && trendHasSessions ? (
                   <AttendanceChart data={data} groups={trendGroups} meetingId={activeFilter} presentTip={t.chartPresentTip} title="" lang={lang} />
                 ) : (
                   <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4">
                     <p className="text-sm text-gray-400">
-                      {pickedTrendGroups.length > 0
-                        ? t.noTrendGroupsInLanguage(trendLanguageOptions.find(o => o.id === activeTrendLanguage)?.label || '')
-                        : breakGlass ? t.noTrendGroupsBreakGlass : canManage ? t.noTrendGroupsHint : t.noTrendGroups}
+                      {trendGroups.length === 0 ? t.noTrendGroups : t.noTrendSessions}
                     </p>
                   </div>
                 )}
