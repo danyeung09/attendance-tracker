@@ -1855,7 +1855,7 @@
               carries its own meeting picker and can span several meetings, so
               neither follows the single-meeting filter above - that one governs
               the session list, which is why they sit outside its empty check. */}
-          <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 mb-6">
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 mb-5">
             <div>
               <div className="px-1 mb-2">
                 <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">{t.trendByLanguage}</h2>
@@ -1913,6 +1913,10 @@
               )}
             </div>
           </div>
+
+          {/* The trends answer a different question from the session list, so a
+              rule stops the eye reading the sessions as a continuation of them. */}
+          <hr className="border-gray-200 mb-5" />
 
           <div className="flex items-center gap-3 px-1 mb-3">
             <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">{t.sessionsHeading}</h2>
