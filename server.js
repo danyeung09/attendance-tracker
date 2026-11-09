@@ -236,7 +236,38 @@ const findUserId = (data, id) => (data.users || []).find(u => u.id === id);
 const publicUser = (u) => ({
   id: u.id, username: u.username, displayName: u.displayName || u.username,
   role: u.role, active: u.active !== false, createdAt: u.createdAt || null,
+  resetRequestedAt:   u.resetRequestedAt || null,
+  resetCodeExpiresAt: liveResetCode(u) ? u.resetCode.expiresAt : null,
 });
+
+// ─── Forgotten passwords ──────────────────────────────────────────────────────
+// Accounts carry no email address, so a reset goes through an admin: the user
+// asks from the sign-in screen, an admin issues a one-time code and passes it
+// on in person or by text, and the user trades the code for a password of their
+// own choosing — the admin never learns it.
+//
+// The code is short enough to read out, so it is kept on a tight leash: it
+// expires, it dies after a few wrong guesses, and the redeem endpoint shares
+// the login throttle. Only an HMAC of it is stored, keyed with SESSION_SECRET,
+// so a copy of data.json alone can't be used to work the code back out.
+const RESET_CODE_TTL_MS       = 24 * 60 * 60 * 1000;
+const RESET_CODE_MAX_ATTEMPTS = 5;
+
+const resetCodeDigest = (userId, code) =>
+  crypto.createHmac('sha256', AUTH.secret).update(`${userId}:${code}`).digest('hex');
+
+const liveResetCode = (u) =>
+  !!(u && u.resetCode && Date.parse(u.resetCode.expiresAt) > Date.now()
+     && (u.resetCode.attempts || 0) < RESET_CODE_MAX_ATTEMPTS);
+
+// Six digits, from a real random source, kept as a string so leading zeros survive.
+const newResetCode = () => String(crypto.randomInt(0, 1_000_000)).padStart(6, '0');
+
+// Any password change settles an outstanding request and voids its code.
+function clearReset(user) {
+  delete user.resetRequestedAt;
+  delete user.resetCode;
+}
 
 // A user's own "focus groups" — which groups float to the top of a meeting's
 // group list for them, everything else collapsed under "Others". Purely a
@@ -507,6 +538,67 @@ app.post('/api/login/break-glass', route(async (req, res) => {
   res.json({ role: 'admin', username: 'break-glass admin', breakGlass: true, focusGroupIds: [], trendGroupIds: [], memberSort: 'last', memberSortDir: 'asc' });
 }));
 
+// Ask for a reset. Always answers the same way, so it can't be used to discover
+// which usernames exist; an unknown or deactivated account just records nothing.
+// Asking again keeps the original time, so the admin sees how long it has waited.
+app.post('/api/password-reset/request', route(async (req, res) => {
+  const ip = req.ip || 'unknown';
+  if (loginBlocked(ip)) throw new HttpError(429, 'Too many failed attempts. Try again in 15 minutes.');
+  const user = findUser(store, (req.body || {}).username);
+  if (user && user.active !== false && !user.resetRequestedAt) {
+    await commit(s => {
+      const u = findUserId(s, user.id);
+      if (u && !u.resetRequestedAt) u.resetRequestedAt = new Date().toISOString();
+    });
+  }
+  res.json({ ok: true });
+}));
+
+// Trade a reset code for a new password, and sign straight in with it. Every
+// wrong guess counts against both the IP throttle and the code itself, and the
+// one message covers every way it can fail.
+app.post('/api/password-reset/complete', route(async (req, res) => {
+  const ip = req.ip || 'unknown';
+  if (loginBlocked(ip)) throw new HttpError(429, 'Too many failed attempts. Try again in 15 minutes.');
+
+  const { username, code, newPassword } = req.body || {};
+  if (typeof newPassword !== 'string' || newPassword.length < MIN_PASSWORD_LENGTH) {
+    throw new HttpError(400, `New password must be at least ${MIN_PASSWORD_LENGTH} characters.`);
+  }
+  const user = findUser(store, username);
+  const { salt, hash } = await hashPassword(newPassword);
+
+  // No such account: nothing to write, but fail exactly like a wrong code.
+  const result = !user ? null : await commit(s => {
+    const u = findUserId(s, user.id);
+    if (!u || u.active === false || !liveResetCode(u)) return null;
+    const given = Buffer.from(resetCodeDigest(u.id, String(code || '').trim()), 'hex');
+    const want  = Buffer.from(u.resetCode.digest, 'hex');
+    if (given.length !== want.length || !crypto.timingSafeEqual(given, want)) {
+      u.resetCode.attempts = (u.resetCode.attempts || 0) + 1;
+      return null;
+    }
+    u.salt = salt;
+    u.hash = hash;
+    u.sessionVersion = (u.sessionVersion || 1) + 1;
+    clearReset(u);
+    return { token: issueUserToken(u), user: { ...u } };
+  });
+
+  if (!result) {
+    noteLoginFailure(ip);
+    throw new HttpError(400, 'That reset code is wrong or has expired. Ask an admin for a new one.');
+  }
+  loginAttempts.delete(ip);
+  const u = result.user;
+  setSessionCookie(req, res, result.token);
+  res.json({
+    role: u.role, username: u.displayName || u.username,
+    focusGroupIds: focusGroupIds(u), trendGroupIds: trendGroupIds(u),
+    memberSort: memberSort(u), memberSortDir: memberSortDir(u),
+  });
+}));
+
 app.post('/api/logout', (req, res) => {
   clearSessionCookie(req, res);
   res.json({ ok: true });
@@ -604,6 +696,35 @@ app.post('/api/users/:id/password', requireAdmin, route(async (req, res) => {
     user.salt = salt;
     user.hash = hash;
     user.sessionVersion = (user.sessionVersion || 1) + 1;
+    clearReset(user);
+  });
+  res.json({ ok: true });
+}));
+
+// Issue a one-time reset code. The plain code is in this response and nowhere
+// else — issuing again replaces it, which is also how a lost code is recovered.
+app.post('/api/users/:id/reset-code', requireAdmin, route(async (req, res) => {
+  const code = newResetCode();
+  const expiresAt = await commit(s => {
+    const user = findUserId(s, req.params.id);
+    if (!user) throw new HttpError(404, 'User not found');
+    if (user.active === false) throw new HttpError(400, `${user.username} is deactivated — reactivate them first.`);
+    user.resetCode = {
+      digest: resetCodeDigest(user.id, code),
+      expiresAt: new Date(Date.now() + RESET_CODE_TTL_MS).toISOString(),
+      attempts: 0,
+    };
+    return user.resetCode.expiresAt;
+  });
+  res.json({ code, expiresAt });
+}));
+
+// Dismiss a request and void any code issued for it.
+app.delete('/api/users/:id/reset-code', requireAdmin, route(async (req, res) => {
+  await commit(s => {
+    const user = findUserId(s, req.params.id);
+    if (!user) throw new HttpError(404, 'User not found');
+    clearReset(user);
   });
   res.json({ ok: true });
 }));
@@ -640,6 +761,7 @@ app.post('/api/me/password', route(async (req, res) => {
     user.salt = salt;
     user.hash = hash;
     user.sessionVersion = (user.sessionVersion || 1) + 1;
+    clearReset(user);
     return issueUserToken(user);
   });
   // Every other session for this account is now invalid; keep this one signed in.

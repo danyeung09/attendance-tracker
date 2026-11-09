@@ -609,6 +609,25 @@ Update the environment variable on your host and restart the app. Existing
 sessions stay valid until they expire (30 days) — to force everyone to sign in
 again with the new password, change `SESSION_SECRET` at the same time.
 
+### Forgotten account passwords
+
+Accounts have no email address, so a forgotten password goes through an admin:
+
+1. On the sign-in screen the user taps **Forgot password?**, enters their username
+   and taps **Ask for a Reset Code**.
+2. An admin opens **Manage › Users**. A banner counts the waiting requests and the
+   account is marked *Asked for a password reset*. Tap **Issue reset code**.
+3. A 6-digit code is shown **once**. Pass it on in person or by message.
+4. The user enters their username, the code and a new password of their own, and is
+   signed straight in. Every other device signed in as them is signed out.
+
+A code works once, for 24 hours, and stops working after 5 wrong guesses. Issuing a
+new one replaces the old one, which is also how a lost code is recovered.
+**Dismiss** clears a request and voids any code issued for it. An admin can also
+issue a code without a request, or use **Reset password** to set one directly.
+Codes are signed with `SESSION_SECRET`, so changing that also voids every
+outstanding code.
+
 ### How sessions work
 
 Signing in sets a `HttpOnly`, `SameSite=Lax` cookie holding an HMAC-signed

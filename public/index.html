@@ -91,6 +91,26 @@
         passwordPh: 'Password',
         showPassword: 'Show password',
         hidePassword: 'Hide password',
+        forgotPassword: 'Forgot password?',
+        forgotSubtitle: 'Ask an admin for a reset code',
+        forgotHint: 'Enter your username. An admin will see your request and give you a reset code, in person or by message.',
+        requestReset: 'Ask for a Reset Code',
+        resetRequested: 'Request sent. When an admin gives you your code, enter it here with your new password.',
+        haveResetCode: 'I already have a reset code',
+        resetSubtitle: 'Choose a new password',
+        resetCodePh: 'Reset code (6 digits)',
+        setNewPassword: 'Set New Password',
+        resetRequestsWaiting: n => n === 1 ? '1 person has asked for a password reset.' : `${n} people have asked for a password reset.`,
+        resetRequestedLabel: when => `Asked for a password reset · ${when}`,
+        resetCodeActiveLabel: when => `Reset code issued · valid until ${when}`,
+        issueResetCode: 'Issue reset code',
+        dismissReset: 'Dismiss',
+        confirmIssueResetCode: who => `Issue a reset code for @${who}? Any earlier code for them stops working.`,
+        confirmDismissReset: who => `Dismiss @${who}'s reset request? Any code already issued stops working.`,
+        resetCodeTitle: 'Reset code',
+        resetCodeBody: (who, until) => `Give this code to @${who}. On the sign-in screen they choose "Forgot password?", then "I already have a reset code". It works once, until ${until}.`,
+        resetCodeOnce: 'This is the only time the code is shown.',
+        done: 'Done',
         currentPasswordPh: 'Current password',
         newPasswordPh: 'New password',
         confirmPasswordPh: 'Confirm password',
@@ -303,6 +323,26 @@
         passwordPh: '密碼',
         showPassword: '顯示密碼',
         hidePassword: '隱藏密碼',
+        forgotPassword: '忘記密碼？',
+        forgotSubtitle: '向管理員索取重設碼',
+        forgotHint: '請輸入使用者名稱。管理員會看到您的申請，並當面或以訊息將重設碼交給您。',
+        requestReset: '申請重設碼',
+        resetRequested: '申請已送出。管理員將重設碼交給您後，請在此輸入重設碼及新密碼。',
+        haveResetCode: '我已經有重設碼',
+        resetSubtitle: '設定新密碼',
+        resetCodePh: '重設碼（6 位數字）',
+        setNewPassword: '設定新密碼',
+        resetRequestsWaiting: n => `有 ${n} 位使用者申請重設密碼。`,
+        resetRequestedLabel: when => `已申請重設密碼 · ${when}`,
+        resetCodeActiveLabel: when => `已發出重設碼 · 有效至 ${when}`,
+        issueResetCode: '發出重設碼',
+        dismissReset: '略過',
+        confirmIssueResetCode: who => `確定為 @${who} 發出重設碼？先前發出的重設碼將失效。`,
+        confirmDismissReset: who => `確定略過 @${who} 的重設申請？已發出的重設碼將失效。`,
+        resetCodeTitle: '重設碼',
+        resetCodeBody: (who, until) => `請將此重設碼交給 @${who}。對方在登入畫面點選「忘記密碼？」，再點選「我已經有重設碼」。此碼只能使用一次，有效至 ${until}。`,
+        resetCodeOnce: '重設碼只會顯示這一次。',
+        done: '完成',
         currentPasswordPh: '目前密碼',
         newPasswordPh: '新密碼',
         confirmPasswordPh: '確認密碼',
@@ -515,6 +555,26 @@
         passwordPh: '비밀번호',
         showPassword: '비밀번호 표시',
         hidePassword: '비밀번호 숨기기',
+        forgotPassword: '비밀번호를 잊으셨나요?',
+        forgotSubtitle: '관리자에게 재설정 코드 요청',
+        forgotHint: '사용자 이름을 입력하세요. 관리자가 요청을 확인하고 직접 또는 메시지로 재설정 코드를 전달해 드립니다.',
+        requestReset: '재설정 코드 요청',
+        resetRequested: '요청을 보냈습니다. 관리자에게 코드를 받으면 여기에 새 비밀번호와 함께 입력하세요.',
+        haveResetCode: '재설정 코드가 이미 있습니다',
+        resetSubtitle: '새 비밀번호 설정',
+        resetCodePh: '재설정 코드 (6자리)',
+        setNewPassword: '새 비밀번호 설정',
+        resetRequestsWaiting: n => `${n}명이 비밀번호 재설정을 요청했습니다.`,
+        resetRequestedLabel: when => `비밀번호 재설정 요청 · ${when}`,
+        resetCodeActiveLabel: when => `재설정 코드 발급됨 · ${when}까지 유효`,
+        issueResetCode: '재설정 코드 발급',
+        dismissReset: '무시',
+        confirmIssueResetCode: who => `@${who}의 재설정 코드를 발급할까요? 이전에 발급한 코드는 더 이상 사용할 수 없습니다.`,
+        confirmDismissReset: who => `@${who}의 재설정 요청을 무시할까요? 이미 발급한 코드는 더 이상 사용할 수 없습니다.`,
+        resetCodeTitle: '재설정 코드',
+        resetCodeBody: (who, until) => `이 코드를 @${who}에게 전달하세요. 로그인 화면에서 "비밀번호를 잊으셨나요?"를 누른 뒤 "재설정 코드가 이미 있습니다"를 선택하면 됩니다. ${until}까지 한 번만 사용할 수 있습니다.`,
+        resetCodeOnce: '이 코드는 지금 한 번만 표시됩니다.',
+        done: '완료',
         currentPasswordPh: '현재 비밀번호',
         newPasswordPh: '새 비밀번호',
         confirmPasswordPh: '비밀번호 확인',
@@ -1037,6 +1097,11 @@
       const signInBreakGlass = useCallback(async (password) =>
         adoptSession(await api.post('/api/login/break-glass', { password })), [adoptSession]);
 
+      // Forgotten password: trading an admin-issued code for a new password
+      // signs straight in, the same as a successful login.
+      const completeReset = useCallback(async (fields) =>
+        adoptSession(await api.post('/api/password-reset/complete', fields)), [adoptSession]);
+
       const signOut = useCallback(async () => {
         try { await api.post('/api/logout'); } catch { /* clear locally regardless */ }
         resetToSignedOut(null);
@@ -1110,7 +1175,7 @@
         <Ctx.Provider value={{
           data, refresh, loading, apiError, view, navigate, goBack, goHome, history, lang, setLang, t,
           role, isAdmin, canManage, username, breakGlass, authState, authNotice,
-          signIn, register, signInBreakGlass, signOut,
+          signIn, register, signInBreakGlass, completeReset, signOut,
           focusGroupIds, toggleFocusGroup,
           trendGroupIds, toggleTrendGroup, saveTrendGroups,
           memberSort, setMemberSort,
@@ -2316,28 +2381,41 @@
     };
 
     // Full-page gate. Nothing in the app renders until the server confirms a
-    // session. Three modes: sign in with an account, create one with the join
-    // code, or the break-glass admin password for recovery.
+    // session. Modes: sign in with an account, create one, the break-glass admin
+    // password for recovery, and the two halves of a forgotten password — asking
+    // an admin for a reset code ('forgot'), then redeeming it ('reset').
     const SignInScreen = () => {
-      const { signIn, register, signInBreakGlass, t, lang, setLang, authNotice, apiError } = useApp();
-      const [mode, setMode] = useState('signin');   // 'signin' | 'register' | 'breakglass'
-      const [f,    setF]    = useState({ username:'', password:'', displayName:'', confirm:'' });
+      const { signIn, register, signInBreakGlass, completeReset, t, lang, setLang, authNotice, apiError } = useApp();
+      const [mode, setMode] = useState('signin');   // 'signin' | 'register' | 'breakglass' | 'forgot' | 'reset'
+      const blank = { username:'', password:'', displayName:'', confirm:'', code:'' };
+      const [f,    setF]    = useState(blank);
       const [err,  setErr]  = useState('');
+      const [note, setNote] = useState('');
       const [busy, setBusy] = useState(false);
 
       const set   = (k) => (v) => setF(prev => ({ ...prev, [k]: v }));
-      const go    = (m) => { setMode(m); setErr(''); setF({ username:'', password:'', displayName:'', confirm:'' }); };
+      // The username carries over into the reset steps, so it isn't typed twice.
+      const go    = (m) => {
+        setMode(m); setErr(''); setNote('');
+        setF(prev => ({ ...blank, username: m === 'forgot' || m === 'reset' ? prev.username : '' }));
+      };
 
       const submit = async (e) => {
         e.preventDefault();
         if (busy) return;
         setErr('');
-        if (mode === 'register' && f.password !== f.confirm) { setErr(t.passwordsDiffer); return; }
+        if ((mode === 'register' || mode === 'reset') && f.password !== f.confirm) { setErr(t.passwordsDiffer); return; }
         setBusy(true);
         try {
           if (mode === 'signin')     await signIn(f.username, f.password);
           if (mode === 'register')   await register({ username:f.username, password:f.password, displayName:f.displayName });
           if (mode === 'breakglass') await signInBreakGlass(f.password);
+          if (mode === 'reset')      await completeReset({ username:f.username, code:f.code, newPassword:f.password });
+          if (mode === 'forgot') {
+            await api.post('/api/password-reset/request', { username:f.username });
+            go('reset');
+            setNote(t.resetRequested);
+          }
         } catch (ex) {
           setErr(ex.status === 429 ? t.tooManyAttempts : (ex.message || t.wrongPassword));
           setF(prev => ({ ...prev, password:'', confirm:'' }));
@@ -2348,7 +2426,13 @@
 
       const ready = mode === 'signin'   ? f.username && f.password
                   : mode === 'register' ? f.username && f.password && f.confirm
+                  : mode === 'forgot'   ? f.username
+                  : mode === 'reset'    ? f.username && f.code && f.password && f.confirm
                   : f.password;
+
+      const subtitle = { register: t.registerSubtitle, breakglass: t.breakGlassSubtitle,
+                         forgot: t.forgotSubtitle, reset: t.resetSubtitle }[mode] || t.signInSubtitle;
+      const submitLabel = { register: t.createAccount, forgot: t.requestReset, reset: t.setNewPassword }[mode] || t.login;
 
       return (
         <div className="min-h-screen flex items-center justify-center p-4" style={{ position:'relative' }}>
@@ -2359,7 +2443,7 @@
                 <div>
                   <h1 className="text-xl font-bold text-gray-800">{t.signInTitle}</h1>
                   <p className="text-sm text-gray-500 mt-0.5">
-                    {mode === 'register' ? t.registerSubtitle : mode === 'breakglass' ? t.breakGlassSubtitle : t.signInSubtitle}
+                    {subtitle}
                   </p>
                 </div>
                 <LangPicker lang={lang} setLang={setLang}
@@ -2376,23 +2460,39 @@
                 {mode === 'register' && (
                   <TextField value={f.displayName} onChange={set('displayName')} placeholder={t.displayNamePh} />
                 )}
-                <TextField type="password" value={f.password} onChange={set('password')}
-                  placeholder={mode === 'breakglass' ? t.adminPasswordPh : t.passwordPh}
-                  autoFocus={mode === 'breakglass'}
-                  autoComplete={mode === 'register' ? 'new-password' : 'current-password'} />
-                {mode === 'register' && (
+                {mode === 'reset' && (
+                  <TextField value={f.code} onChange={set('code')} placeholder={t.resetCodePh}
+                    autoFocus={!!f.username} autoComplete="one-time-code" />
+                )}
+                {mode !== 'forgot' && (
+                  <TextField type="password" value={f.password} onChange={set('password')}
+                    placeholder={mode === 'breakglass' ? t.adminPasswordPh : mode === 'reset' ? t.newPasswordPh : t.passwordPh}
+                    autoFocus={mode === 'breakglass'}
+                    autoComplete={mode === 'register' || mode === 'reset' ? 'new-password' : 'current-password'} />
+                )}
+                {(mode === 'register' || mode === 'reset') && (
                   <TextField type="password" value={f.confirm} onChange={set('confirm')}
                     placeholder={t.confirmPasswordPh} autoComplete="new-password" />
                 )}
+                {mode === 'signin' && (
+                  <div className="text-right -mt-1">
+                    <button type="button" onClick={() => go('forgot')} className="text-xs text-indigo-600 hover:underline">{t.forgotPassword}</button>
+                  </div>
+                )}
                 {mode === 'register' && <p className="text-xs text-gray-400">{t.registerHint}</p>}
+                {mode === 'forgot'   && <p className="text-xs text-gray-400">{t.forgotHint}</p>}
+                {note && <p className="bg-green-50 border border-green-200 text-green-700 rounded-lg px-3 py-2 text-xs">{note}</p>}
                 {err && <p className="text-red-500 text-xs">{err}</p>}
                 <button type="submit" disabled={busy || !ready}
                   className="w-full py-2.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-semibold text-sm disabled:opacity-40">
-                  {busy ? t.signingIn : mode === 'register' ? t.createAccount : t.login}
+                  {busy ? t.signingIn : submitLabel}
                 </button>
               </form>
 
               <div className="mt-4 pt-4 border-t border-gray-100 space-y-1.5 text-center">
+                {mode === 'forgot' && (
+                  <button onClick={() => go('reset')} className="block w-full text-xs text-indigo-600 hover:underline">{t.haveResetCode}</button>
+                )}
                 {mode !== 'register' && (
                   <button onClick={() => go('register')} className="block w-full text-xs text-indigo-600 hover:underline">{t.needAccount}</button>
                 )}
@@ -2455,6 +2555,7 @@
       const [users,   setUsers]   = useState(null);
       const [uForm,   setUForm]   = useState(null);   // new-user form
       const [pwReset, setPwReset] = useState(null);   // { id, username, password }
+      const [issuedCode, setIssuedCode] = useState(null);   // { username, code, expiresAt }
 
       const loadUsers = useCallback(async () => {
         try { setUsers(await api.get('/api/users')); }
@@ -2493,6 +2594,18 @@
           });
           setUForm(null);
         });
+      };
+      const fmtWhen = (iso) => new Date(iso).toLocaleString(t.locale, { dateStyle:'medium', timeStyle:'short' });
+      const issueResetCode = (u) => {
+        if (!confirm(t.confirmIssueResetCode(u.username))) return;
+        runUsers(async () => {
+          const { code, expiresAt } = await api.post(`/api/users/${u.id}/reset-code`);
+          setIssuedCode({ username: u.username, code, expiresAt });
+        });
+      };
+      const dismissReset = (u) => {
+        if (!confirm(t.confirmDismissReset(u.username))) return;
+        runUsers(() => api.del(`/api/users/${u.id}/reset-code`));
       };
       const savePwReset = () => {
         runUsers(async () => {
@@ -2879,6 +2992,12 @@
                 </p>
               )}
 
+              {users && users.users.some(u => u.resetRequestedAt && !u.resetCodeExpiresAt && u.active) && (
+                <p className="mb-3 text-sm text-amber-800 bg-amber-50 border border-amber-300 rounded-xl px-3 py-2 font-medium">
+                  {t.resetRequestsWaiting(users.users.filter(u => u.resetRequestedAt && !u.resetCodeExpiresAt && u.active).length)}
+                </p>
+              )}
+
               <p className="text-xs text-gray-500 mb-3">{t.usersHint}</p>
 
               {users === null
@@ -2898,12 +3017,29 @@
                                   {!u.active && <span className="ml-2 text-xs font-normal text-gray-500">{t.deactivatedLabel}</span>}
                                 </p>
                                 <p className="text-sm text-gray-500">@{u.username}</p>
+                                {u.resetCodeExpiresAt
+                                  ? <p className="text-xs text-indigo-600 mt-1">{t.resetCodeActiveLabel(fmtWhen(u.resetCodeExpiresAt))}</p>
+                                  : u.resetRequestedAt && <p className="text-xs text-amber-700 font-medium mt-1">{t.resetRequestedLabel(fmtWhen(u.resetRequestedAt))}</p>}
+                                {(u.resetRequestedAt || u.resetCodeExpiresAt) && u.active && (
+                                  <div className="flex gap-1.5 mt-2">
+                                    <button onClick={() => issueResetCode(u)}
+                                      className="px-2 py-1 text-xs bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-semibold">{t.issueResetCode}</button>
+                                    <button onClick={() => dismissReset(u)}
+                                      className="px-2 py-1 text-xs border border-gray-300 rounded-lg text-gray-600 hover:bg-gray-50">{t.dismissReset}</button>
+                                  </div>
+                                )}
                               </div>
                               <div className="flex items-center gap-1.5 shrink-0">
                                 <select value={u.role} onChange={e => setUserRole(u, e.target.value)}
                                   className="border border-gray-300 rounded-lg px-2 py-1.5 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400">
                                   {['pending','viewer','super','admin'].map(r => <option key={r} value={r}>{t.roleNames[r]}</option>)}
                                 </select>
+                                {!u.resetRequestedAt && !u.resetCodeExpiresAt && u.active && (
+                                  <button onClick={() => issueResetCode(u)}
+                                    className="px-2 py-1.5 text-xs border border-gray-300 rounded-lg text-gray-600 hover:bg-gray-50">
+                                    {t.issueResetCode}
+                                  </button>
+                                )}
                                 <button onClick={() => setPwReset({ id:u.id, username:u.username, password:'' })}
                                   title={t.resetPassword}
                                   className="px-2 py-1.5 text-xs border border-gray-300 rounded-lg text-gray-600 hover:bg-gray-50">
@@ -2967,6 +3103,20 @@
                   <button onClick={savePwReset} disabled={!pwReset.password}
                     className="flex-1 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-semibold text-sm disabled:opacity-40">{t.save}</button>
                 </div>
+              </div>
+            </div>
+          )}
+
+          {/* ── Issued Reset Code Modal ── */}
+          {issuedCode && (
+            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+              <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-sm">
+                <h2 className="text-xl font-bold text-gray-800 mb-1">{t.resetCodeTitle}</h2>
+                <p className="text-sm text-gray-500 mb-4">{t.resetCodeBody(issuedCode.username, fmtWhen(issuedCode.expiresAt))}</p>
+                <p className="text-center text-4xl font-mono font-bold tracking-[0.3em] text-indigo-700 bg-indigo-50 rounded-xl py-4 mb-2 select-all">{issuedCode.code}</p>
+                <p className="text-xs text-amber-700 text-center mb-4">{t.resetCodeOnce}</p>
+                <button onClick={() => setIssuedCode(null)}
+                  className="w-full py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-semibold text-sm">{t.done}</button>
               </div>
             </div>
           )}
