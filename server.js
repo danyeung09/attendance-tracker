@@ -27,9 +27,9 @@ app.use(express.static(path.join(__dirname, 'public')));
 const uid = () => crypto.randomBytes(6).toString('hex');
 
 // ─── Seed data ────────────────────────────────────────────────────────────────
-// name is bilingual — { en, zh } — so a meeting or group can display in either
-// language without being recreated. The seed only ships an English string on
-// both sides; a real admin fills in the other language from the UI.
+// name is bilingual — { en, zh }, plus an optional ko — so a meeting or group
+// can display in any language without being recreated. The seed only ships an
+// English string on both sides; a real admin fills in the others from the UI.
 const bilingual = (s) => ({ en: s, zh: s });
 
 // The languages a congregation meets in. A group carries one of these, so the
@@ -37,9 +37,9 @@ const bilingual = (s) => ({ en: s, zh: s });
 // once. Three to start with — the list is editable, so an admin adds whatever
 // else they need rather than being stuck with these.
 const DEFAULT_LANGUAGES = [
-  { id:'lang-en', name:{ en:'English', zh:'英文' } },
-  { id:'lang-zh', name:{ en:'Chinese', zh:'中文' } },
-  { id:'lang-ko', name:{ en:'Korean',  zh:'韓文' } },
+  { id:'lang-en', name:{ en:'English', zh:'英文', ko:'영어' } },
+  { id:'lang-zh', name:{ en:'Chinese', zh:'中文', ko:'중국어' } },
+  { id:'lang-ko', name:{ en:'Korean',  zh:'韓文', ko:'한국어' } },
 ];
 
 const SEED = {
@@ -723,11 +723,14 @@ app.patch('/api/me/member-sort', requireViewer, route(async (req, res) => {
 // under either language toggle without being recreated per language. Only one
 // side is required; if the other is blank it mirrors the side that was given,
 // so nothing ever renders empty. Editing later can fill in the missing side.
+// Korean, ko, is optional on top: stored only when given, and the client falls
+// back to en/zh without it, so a Korean-only name still fills en and zh.
 function normalizeBilingualName(name) {
   const en = String((name && name.en) || '').trim();
   const zh = String((name && name.zh) || '').trim();
-  if (!en && !zh) return null;
-  return { en: en || zh, zh: zh || en };
+  const ko = String((name && name.ko) || '').trim();
+  if (!en && !zh && !ko) return null;
+  return { en: en || zh || ko, zh: zh || en || ko, ...(ko ? { ko } : {}) };
 }
 
 // ─── Meetings ─────────────────────────────────────────────────────────────────
@@ -831,7 +834,7 @@ app.delete('/api/languages/:id', requireAdmin, route(async (req, res) => {
     const used = s.groups.filter(g => g.languageId === req.params.id).length;
     if (used) {
       throw new HttpError(400,
-        `${language.name.en || language.name.zh} is still set on ${used} group${used === 1 ? '' : 's'} — change those first.`);
+        `${language.name.en || language.name.zh || language.name.ko} is still set on ${used} group${used === 1 ? '' : 's'} — change those first.`);
     }
     s.languages = s.languages.filter(l => l.id !== req.params.id);
   });
@@ -964,7 +967,7 @@ app.post('/api/people/import', requireSuper, route(async (req, res) => {
       }
       if (groupName) {
         const wanted = String(groupName).toLowerCase();
-        const grp = s.groups.find(g => [g.name.en, g.name.zh].some(n => n && n.toLowerCase() === wanted));
+        const grp = s.groups.find(g => [g.name.en, g.name.zh, g.name.ko].some(n => n && n.toLowerCase() === wanted));
         if (grp) {
           grp.memberIds = grp.memberIds || [];
           const clash = s.groups.some(g =>
@@ -1225,6 +1228,14 @@ function migrateLanguages(data) {
     data.languages = DEFAULT_LANGUAGES.map(l => ({ ...l, name: { ...l.name } }));
     migrated = true;
   }
+  // Seeded before Korean names existed: give the three defaults their Korean
+  // name, but only where nobody has set one — an admin's own wording stays.
+  data.languages = data.languages.map(l => {
+    const seed = DEFAULT_LANGUAGES.find(d => d.id === l.id);
+    if (!seed || !l.name || l.name.ko) return l;
+    migrated = true;
+    return { ...l, name: { ...l.name, ko: seed.name.ko } };
+  });
   data.groups = (data.groups || []).map(g => {
     if ('languageId' in g) return g;
     migrated = true;

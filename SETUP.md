@@ -445,7 +445,7 @@ today, in `server.js`:
 |----------|----------------|
 | `migrateGroupMeetingIds` | A group's single `meetingId` → the `meetingIds` list it carries now |
 | `migrateBilingualNames` | A plain-string meeting or group name → `{ en, zh }` |
-| `migrateLanguages` | Seeds the `languages` list, and gives every group a `languageId` |
+| `migrateLanguages` | Seeds the `languages` list, gives every group a `languageId`, and adds Korean names to the three seeded languages |
 
 Each one is idempotent: a second boot finds nothing to do and writes nothing.
 
@@ -461,7 +461,17 @@ work of its own.
   the document has no `languages` key at all, so an admin who deliberately empties
   the list keeps it empty across restarts;
 - add `languageId: null` to every existing group, leaving them unlabelled until
-  somebody sets a language in **Manage › Groups**.
+  somebody sets a language in **Manage › Groups**;
+- give the seeded English, Chinese and Korean entries a Korean name (`ko`) where
+  they don't have one yet — a Korean name an admin already typed is left alone.
+
+### Interface languages
+
+The app reads in **English, Chinese or Korean** — pick one from the language menu
+in the header (or on the sign-in screen). Meeting, group and language names have an
+English and a Chinese side plus an optional **Korean** side. Anything without a
+Korean name shows its English name to a Korean reader, so existing data needs no
+editing; fill the Korean names in from **Manage** whenever convenient.
 
 Nothing is removed and no attendance record is touched, so the upgrade is safe to
 apply to a live store. Take a copy of `data.json` (or a `mysqldump` of `app_store`)

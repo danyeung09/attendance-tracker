@@ -20,7 +20,6 @@
     const TRANSLATIONS = {
       en: {
         locale: 'en-US',
-        langToggle: '中文',
         days: ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'],
         appName: 'AttendanceTracker',
         meetingAttendance: 'Meeting Attendance',
@@ -145,6 +144,7 @@
         groupNamePh: 'e.g. Worship Team',
         nameEnLabel: 'English Name',
         nameZhLabel: 'Chinese Name',
+        nameKoLabel: 'Korean Name (optional)',
         nameHint: 'Fill in at least one — the other can be added later.',
         meetingLabel: 'Meeting',
         membersLabel: 'Members',
@@ -164,6 +164,7 @@
         languagesHint: 'A group is set to one of these, so the Attendance Trend can be read one language at a time.',
         importCSV: 'Import CSV',
         newPerson: 'New Person',
+        editPersonTitle: 'Edit Person',
         noPeople: 'No people added yet.',
         newMeeting: 'New Meeting',
         editMeetingTitle: 'Edit Meeting',
@@ -181,6 +182,7 @@
         savePerson: 'Save Person',
         saveMeeting: 'Save Meeting',
         importTitle: 'Import from CSV',
+        importHint: <>Required: <code className="bg-gray-100 px-1 rounded text-xs">firstName</code>, <code className="bg-gray-100 px-1 rounded text-xs">lastName</code>. Optional: <code className="bg-gray-100 px-1 rounded text-xs">phone</code>, <code className="bg-gray-100 px-1 rounded text-xs">group</code> (must match an existing group name exactly). Also accepts <code className="bg-gray-100 px-1 rounded text-xs">first_name</code> / <code className="bg-gray-100 px-1 rounded text-xs">last_name</code> / <code className="bg-gray-100 px-1 rounded text-xs">group_name</code>.</>,
         confirmDeleteGroup: 'Delete this group?',
         confirmDeletePerson: 'Remove this person? They will be taken out of all groups, but past attendance records keep their name.',
         confirmDeleteMeeting: 'Delete this meeting? Groups only assigned to it will be removed; groups also assigned to other meetings will stay, just without this one.',
@@ -228,7 +230,6 @@
       },
       zh: {
         locale: 'zh-TW',
-        langToggle: 'EN',
         days: ['星期日','星期一','星期二','星期三','星期四','星期五','星期六'],
         appName: '出席記錄',
         meetingAttendance: '聚會出席',
@@ -353,6 +354,7 @@
         groupNamePh: '例：敬拜團隊',
         nameEnLabel: '英文名稱',
         nameZhLabel: '中文名稱',
+        nameKoLabel: '韓文名稱（選填）',
         nameHint: '至少填寫一項，之後可以再補上另一個語言。',
         meetingLabel: '聚會',
         membersLabel: '成員',
@@ -372,6 +374,7 @@
         languagesHint: '每個小組可設定其中一種語言，出席趨勢即可按語言分別檢視。',
         importCSV: '匯入 CSV',
         newPerson: '新增人員',
+        editPersonTitle: '編輯人員',
         noPeople: '尚未新增人員。',
         newMeeting: '新增聚會',
         editMeetingTitle: '編輯聚會',
@@ -389,6 +392,7 @@
         savePerson: '儲存人員',
         saveMeeting: '儲存聚會',
         importTitle: '從 CSV 匯入',
+        importHint: <>必填：<code className="bg-gray-100 px-1 rounded text-xs">firstName</code>、<code className="bg-gray-100 px-1 rounded text-xs">lastName</code>。選填：<code className="bg-gray-100 px-1 rounded text-xs">phone</code>、<code className="bg-gray-100 px-1 rounded text-xs">group</code>（須與現有小組名稱完全相符）。亦接受 <code className="bg-gray-100 px-1 rounded text-xs">first_name</code> / <code className="bg-gray-100 px-1 rounded text-xs">last_name</code> / <code className="bg-gray-100 px-1 rounded text-xs">group_name</code>。</>,
         confirmDeleteGroup: '確定刪除此小組？',
         confirmDeletePerson: '確定移除此人員？他們將從所有小組中移除，但過往的出席記錄仍會保留其姓名。',
         confirmDeleteMeeting: '確定刪除此聚會？僅屬於此聚會的小組將被移除；同時屬於其他聚會的小組會保留，只是不再包含此聚會。',
@@ -434,6 +438,253 @@
         othersGroups: n => `其他 (${n})`,
         viewOnlyAttendance: '僅供檢視 — 若需記錄出席，請請管理員將您設為超級使用者。',
       },
+      ko: {
+        locale: 'ko-KR',
+        days: ['일요일','월요일','화요일','수요일','목요일','금요일','토요일'],
+        appName: '출석 기록',
+        meetingAttendance: '모임 출석',
+        today: '오늘',
+        tomorrow: '내일',
+        inDays: n => `${n}일 후`,
+        groupCount: n => `${n}개 소그룹`,
+        sessionsRecorded: (n, date) => `${date} ${n}회 기록됨`,
+        noRecordsFor: date => `${date} 기록 없음`,
+        overview: '개요',
+        labelPeople: '인원',
+        labelGroups: '소그룹',
+        labelSessions: '기록',
+        every: '매주',
+        anyDay: '아무 요일',
+        anyDayOption: '한 주 중 아무 요일',
+        anyDayHint: '소그룹마다 모이는 요일이 다를 때 선택하세요 — 출석은 주 단위로 집계됩니다.',
+        sortBy: '정렬',
+        sortLastName: '성',
+        sortFirstName: '이름',
+        sortAsc: '오름차순',
+        sortDesc: '내림차순',
+        noGroupsAdmin: '아직 소그룹이 없습니다 — 관리 모드에서 추가하세요.',
+        memberCount: n => `구성원 ${n}명`,
+        recorded: '기록됨',
+        noRecord: '기록 없음',
+        presentOf: (p, tot) => `${p}/${tot} 출석`,
+        sessionDate: '모임 날짜',
+        alreadyRecordedNotice: '이 날짜에는 이미 저장된 기록이 있습니다 — 여기서 변경하면 해당 기록이 수정됩니다.',
+        newSessionNotice: '이 날짜에는 아직 기록이 없습니다 — 새 모임입니다.',
+        recordTodayInstead: date => `대신 오늘(${date}) 모임을 새로 기록하기`,
+        previousSessions: '이전 기록',
+        presentCount: (p, tot) => `${p}/${tot} 출석`,
+        allPresent: '모두 출석',
+        allAbsent: '모두 결석',
+        presentLabel: '출석',
+        absentLabel: '결석',
+        saveAttendance: '출석 저장',
+        saving: '저장 중…',
+        attendanceSaved: '✓ 출석이 저장되었습니다',
+        errSaving: e => '저장 오류: ' + e,
+        chartPresentTip: ctx => ` ${ctx.dataset.label}: ${ctx.parsed.y}명 출석`,
+        attendanceHistory: '출석 기록',
+        allMeetings: '모든 모임',
+        allLanguages: '모든 언어',
+        noRecords: '출석 기록이 없습니다.',
+        trendByLanguage: '언어별 출석 추이',
+        trendByGroup: '소그룹별 출석 추이',
+        allMeetingsDefault: '모든 모임',
+        sessionsHeading: '모임 기록',
+        allLanguagesDefault: '모든 언어',
+        noLanguagesYet: '아직 언어가 설정된 소그룹이 없습니다 — 관리 › 소그룹에서 설정하면 언어별로 볼 수 있습니다.',
+        noTrendGroups: '이 차트에 설정된 소그룹이 아직 없습니다.',
+        noTrendSessions: '이 선택에 대한 기록이 아직 없습니다 — 다른 언어나 위에서 다른 모임을 선택해 보세요.',
+        allGroupsDefault: '모든 소그룹',
+        exportCsv: 'CSV 내보내기',
+        adminPasswordPh: '관리자 비밀번호',
+        login: '로그인',
+        cancel: '취소',
+        save: '저장',
+        create: '만들기',
+        goBack: '뒤로',
+        signInTitle: '출석 기록',
+        signInSubtitle: '계속하려면 로그인하세요',
+        registerSubtitle: '계정 만들기',
+        breakGlassSubtitle: '관리자 복구 로그인',
+        usernamePh: '사용자 이름',
+        displayNamePh: '표시 이름 (선택)',
+        passwordPh: '비밀번호',
+        currentPasswordPh: '현재 비밀번호',
+        newPasswordPh: '새 비밀번호',
+        confirmPasswordPh: '비밀번호 확인',
+        passwordsDiffer: '두 비밀번호가 일치하지 않습니다.',
+        registerHint: '누구나 가입할 수 있습니다. 관리자가 계정에 권한을 부여할 때까지 대기 화면이 표시됩니다.',
+        createAccount: '계정 만들기',
+        needAccount: '계정이 없으신가요? 만들기',
+        haveAccount: '이미 계정이 있으신가요? 로그인',
+        useBreakGlass: '관리자 비밀번호로 로그인',
+        wrongPassword: '비밀번호가 올바르지 않습니다.',
+        changePassword: '비밀번호 변경',
+        changePasswordBody: '이 기기에서는 로그인 상태가 유지됩니다. 이 계정으로 로그인된 다른 기기는 모두 로그아웃됩니다.',
+        passwordChanged: '비밀번호가 변경되었습니다.',
+        noAccessTitle: '관리 권한 없음',
+        noAccessBody: (who) => `${who ? who + '님의' : '이'} 계정은 모임, 명단, 출석 기록을 볼 수 있습니다. 출석을 기록하거나 소그룹과 인원을 관리하려면 관리자에게 슈퍼 사용자 권한을 요청하세요.`,
+        roleNames: { pending: '승인 대기', viewer: '열람자', super: '슈퍼 사용자', admin: '관리자' },
+        navHome: '홈',
+        navHistory: '기록',
+        navManage: '관리',
+        navRefresh: '새로고침',
+        newUser: '새 사용자',
+        noUsers: '아직 계정이 없습니다.',
+        usersHint: '역할 변경은 즉시 적용됩니다 — 해당 사용자의 다음 동작부터 새 역할이 사용됩니다.',
+        pendingWaiting: n => `${n}명이 권한 부여를 기다리고 있습니다.`,
+        pendingTitle: '승인 대기 중',
+        pendingBody: (who) => `${who ? who + '님의' : ''} 계정이 만들어졌습니다. 모임을 보거나 출석을 기록하려면 관리자가 권한을 부여해야 합니다. 잠시 후 다시 확인하세요.`,
+        youLabel: '(나)',
+        deactivatedLabel: '· 비활성화됨',
+        resetPassword: '비밀번호 재설정',
+        resetPasswordBody: (who) => `@${who}의 새 비밀번호를 설정합니다. 해당 사용자는 모든 기기에서 로그아웃됩니다.`,
+        passwordResetDone: '비밀번호가 재설정되었습니다. 새 비밀번호를 해당 사용자에게 전달하세요.',
+        deactivate: '비활성화',
+        reactivate: '다시 활성화',
+        confirmRoleChange: (who, role) => `@${who}의 역할을 ${role}(으)로 변경할까요?`,
+        confirmDeactivate: (who) => `@${who}을(를) 비활성화할까요? 로그아웃되며 다시 활성화될 때까지 로그인할 수 없습니다.`,
+        confirmReactivate: (who) => `@${who}을(를) 다시 활성화할까요?`,
+        confirmDeleteUser: (who) => `@${who} 계정을 삭제할까요? 되돌릴 수 없습니다. 이 사용자가 기록한 출석은 영향을 받지 않습니다.`,
+        breakGlassWarning: '계정이 아닌 관리자 복구 비밀번호로 로그인되어 있습니다. 복구 비밀번호를 그만 쓸 수 있도록 본인의 관리자 계정을 만드세요.',
+        tooManyAttempts: '실패한 시도가 너무 많습니다. 15분 후에 다시 시도하세요.',
+        signingIn: '로그인 중…',
+        signOut: '로그아웃',
+        sessionExpired: '세션이 만료되었습니다. 다시 로그인하세요.',
+        adminPanel: '관리자 패널',
+        managePanel: '관리',
+        adminActive: '관리자 모드 사용 중',
+        superActive: '슈퍼 사용자 모드 사용 중',
+        exitAdmin: '나가기',
+        tabLabels: ['소그룹', '인원', '모임', '언어', '계정'],
+        newGroup: '새 소그룹',
+        editGroupTitle: '소그룹 편집',
+        newGroupTitle: '새 소그룹',
+        groupNameLabel: '소그룹 이름',
+        groupNamePh: '예: 찬양팀',
+        nameEnLabel: '영어 이름',
+        nameZhLabel: '중국어 이름',
+        nameKoLabel: '한국어 이름 (선택)',
+        nameHint: '하나 이상 입력하세요 — 나머지는 나중에 추가할 수 있습니다.',
+        meetingLabel: '모임',
+        membersLabel: '구성원',
+        selectedCount: n => `(${n}명 선택됨)`,
+        addPeopleFirst: '먼저 인원 탭에서 인원을 추가하세요.',
+        addMember: '구성원 추가',
+        noGroupsYet: '아직 소그룹이 없습니다.',
+        languageLabel: '언어',
+        noLanguageOption: '언어 없음',
+        noLanguageSet: '언어 미설정',
+        newLanguage: '새 언어',
+        editLanguageTitle: '언어 편집',
+        newLanguageTitle: '새 언어',
+        languageNameLabel: '언어 이름',
+        saveLanguage: '언어 저장',
+        noLanguages: '아직 언어가 없습니다.',
+        languagesHint: '소그룹마다 이 중 하나를 설정하면 출석 추이를 언어별로 볼 수 있습니다.',
+        importCSV: 'CSV 가져오기',
+        newPerson: '새 인원',
+        editPersonTitle: '인원 편집',
+        noPeople: '아직 추가된 인원이 없습니다.',
+        newMeeting: '새 모임',
+        editMeetingTitle: '모임 편집',
+        newMeetingTitle: '새 모임',
+        meetingNameLabel: '모임 이름',
+        meetingNamePh: '예: 기도회',
+        dayOfWeekLabel: '요일',
+        firstNameLabel: '이름',
+        firstNamePh: '이름',
+        lastNameLabel: '성',
+        lastNamePh: '성',
+        phoneLabel: '전화번호',
+        phonePh: '010-1234-5678',
+        saveGroup: '소그룹 저장',
+        savePerson: '인원 저장',
+        saveMeeting: '모임 저장',
+        importTitle: 'CSV에서 가져오기',
+        importHint: <>필수: <code className="bg-gray-100 px-1 rounded text-xs">firstName</code>, <code className="bg-gray-100 px-1 rounded text-xs">lastName</code>. 선택: <code className="bg-gray-100 px-1 rounded text-xs">phone</code>, <code className="bg-gray-100 px-1 rounded text-xs">group</code> (기존 소그룹 이름과 정확히 일치해야 함). <code className="bg-gray-100 px-1 rounded text-xs">first_name</code> / <code className="bg-gray-100 px-1 rounded text-xs">last_name</code> / <code className="bg-gray-100 px-1 rounded text-xs">group_name</code>도 사용할 수 있습니다.</>,
+        confirmDeleteGroup: '이 소그룹을 삭제할까요?',
+        confirmDeletePerson: '이 인원을 삭제할까요? 모든 소그룹에서 제외되지만, 과거 출석 기록에는 이름이 남습니다.',
+        confirmDeleteMeeting: '이 모임을 삭제할까요? 이 모임에만 속한 소그룹은 삭제되고, 다른 모임에도 속한 소그룹은 이 모임만 빠진 채 유지됩니다.',
+        confirmDeleteLanguage: '이 언어를 삭제할까요? 이 언어로 설정된 소그룹을 먼저 변경해야 합니다.',
+        confirmRemoveMember: '이 사람을 소그룹에서 제외할까요?',
+        groupMeetingsRequired: '모임을 하나 이상 선택하세요.',
+        alreadyInGroup: name => `이 사람은 이 모임에서 이미 "${name}"에 속해 있습니다. 한 모임에서는 한 소그룹에만 속할 수 있습니다.`,
+        archivedTip: '더 이상 활동하지 않음 — 이 기록의 정확성을 위해 보관됩니다.',
+        deleteRecordTip: '이 기록 삭제',
+        confirmDeleteRecord: '이 기록을 삭제할까요? 되돌릴 수 없습니다.',
+        editDateTip: '이 기록의 날짜 변경',
+        editDateLabel: '이 기록을 다음 날짜로 이동',
+        recordDetails: '세부 정보',
+        conflictTitle: '다른 사람이 이 기록을 먼저 저장했습니다',
+        conflictBody: (theirs, mine) =>
+          `상대방 버전은 ${theirs}명 출석, 내 버전은 ${mine}명 출석입니다. 유지할 버전을 선택하세요 — 아직 아무것도 덮어쓰지 않았습니다.`,
+        useTheirs: '상대방 버전 사용',
+        keepMine: '내 버전으로 덮어쓰기',
+        outOfDateNotice: '이 기록을 연 뒤 다른 사람이 수정했습니다. 저장하면 상대방 버전을 대체합니다.',
+        groupNameRequired: '소그룹 이름을 입력하세요.',
+        nameRequired: '이름과 성을 입력하세요.',
+        meetingNameRequired: '모임 이름을 입력하세요.',
+        languageNameRequired: '언어 이름을 입력하세요.',
+        noValidRows: '가져올 수 있는 유효한 행이 없습니다 (firstName과 lastName은 필수입니다).',
+        noUnassigned: '이 모임의 모든 인원이 이미 소그룹에 속해 있습니다. 새 인원을 만들거나, 먼저 이 모임의 다른 소그룹에서 제외하세요.',
+        addMemberTo: '대상:',
+        errGeneric: e => '오류: ' + e,
+        importedResult: r => {
+          let s = `${r.added}명을 가져왔습니다`;
+          if (r.groupsUpdated>0) s += `, ${r.groupsUpdated}개 소그룹에 추가됨`;
+          if (r.skipped>0) s += `, 중복 ${r.skipped}건 건너뜀`;
+          if (r.groupsNotFound>0) s += ` (소그룹 이름 ${r.groupsNotFound}개를 찾지 못함)`;
+          return s;
+        },
+        validLabel: '유효',
+        missingNameLabel: '이름 누락 — 건너뜀',
+        groupNamesNotFound: n => `소그룹 이름 ${n}개를 찾지 못함 — 인원은 그대로 가져옵니다`,
+        colFirst: '이름', colLast: '성', colPhone: '전화번호', colGroup: '소그룹', colStatus: '상태',
+        statusOk: '유효', statusSkip: '건너뜀', missingText: '누락',
+        importCount: n => `${n}명 가져오기`,
+        pinGroup: '맨 위에 고정',
+        unpinGroup: '고정 해제',
+        othersGroups: n => `기타 (${n})`,
+        viewOnlyAttendance: '보기 전용 — 출석을 기록하려면 관리자에게 슈퍼 사용자 권한을 요청하세요.',
+      },
+    };
+
+    // The interface languages, in picker order. Each is labelled in its own
+    // language so a reader can always find theirs, whichever one is showing.
+    const UI_LANGUAGES = [
+      { code: 'en', label: 'English' },
+      { code: 'zh', label: '中文' },
+      { code: 'ko', label: '한국어' },
+    ];
+
+    const LangPicker = ({ lang, setLang, className }) => (
+      <select value={lang} onChange={e => setLang(e.target.value)} aria-label="Language" className={className}>
+        {UI_LANGUAGES.map(l => <option key={l.code} value={l.code} className="text-gray-800">{l.label}</option>)}
+      </select>
+    );
+
+    // Names are bilingual — { en, zh } — with an optional Korean side, ko, on
+    // top. One filled-in side is enough; the server mirrors en and zh into
+    // each other, and ko falls back to them when left blank.
+    const hasName = (name) => ['en', 'zh', 'ko'].some(k => (name[k] || '').trim());
+
+    const NameInputs = ({ name, onChange, t, autoFocus }) => {
+      const field = (key, ph, extra = '') => (
+        <input value={name[key] || ''} onChange={e => onChange({ ...name, [key]: e.target.value })} placeholder={ph}
+          autoFocus={autoFocus && key === 'en'}
+          className={`border border-gray-300 rounded-lg px-3 py-2 w-full text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 ${extra}`} />
+      );
+      return (
+        <>
+          <div className="grid grid-cols-2 gap-2">
+            {field('en', t.nameEnLabel)}
+            {field('zh', t.nameZhLabel)}
+            {field('ko', t.nameKoLabel, 'col-span-2')}
+          </div>
+          <p className="text-xs text-gray-400 mt-1">{t.nameHint}</p>
+        </>
+      );
     };
 
     // ─── CSV parser ───────────────────────────────────────────────────────────
@@ -521,7 +772,9 @@
     };
 
     const weekLabel = (s, lang) =>
-      lang === 'zh' ? `${fmtDateShort(s, 'zh-TW')}當週` : `Week of ${fmtDateShort(s)}`;
+      lang === 'zh' ? `${fmtDateShort(s, 'zh-TW')}當週`
+      : lang === 'ko' ? `${fmtDateShort(s, 'ko-KR')} 주간`
+      : `Week of ${fmtDateShort(s)}`;
 
     // A meeting either lands on a fixed weekday or floats: small groups pick
     // their own night, so what their sessions share is the week, not a weekday.
@@ -596,21 +849,22 @@
 
     const EMPTY = { meetings:[], languages:[], groups:[], people:[], attendance:[] };
 
-    // A meeting/group name is bilingual — { en, zh } — so it reads correctly
-    // under either language toggle. Falls back across languages so a name
-    // never renders blank even if one side was somehow left empty.
-    const localizedName = (obj, lang) => (obj && obj.name && (obj.name[lang] || obj.name.en || obj.name.zh)) || '';
+    // A meeting/group name is bilingual — { en, zh }, plus an optional ko — so
+    // it reads correctly under any language choice. Falls back across languages
+    // so a name never renders blank: a Korean reader sees the English name of
+    // anything nobody has given a Korean name yet.
+    const localizedName = (obj, lang) => (obj && obj.name && (obj.name[lang] || obj.name.en || obj.name.zh || obj.name.ko)) || '';
 
     // The language a group meets in, or null when nobody has labelled it yet
     // (every group predating the language list starts out that way).
     const groupLanguage = (data, group) =>
       (group && group.languageId && (data.languages || []).find(l => l.id === group.languageId)) || null;
 
-    // CSV group-name matching: a name typed in the CSV might be either the
-    // English or the Chinese side of a bilingual group name.
+    // CSV group-name matching: a name typed in the CSV might be the English,
+    // Chinese or Korean side of a group name.
     const groupNameMatches = (g, name) => {
       const wanted = String(name).trim().toLowerCase();
-      return [g.name.en, g.name.zh].some(n => n && n.toLowerCase() === wanted);
+      return [g.name.en, g.name.zh, g.name.ko].some(n => n && n.toLowerCase() === wanted);
     };
 
     // Every roster reads like a directory rather than listing people in the
@@ -909,10 +1163,8 @@
               </button>
             </div>
             <div className="flex items-center gap-1">
-              <button onClick={() => setLang(lang === 'en' ? 'zh' : 'en')}
-                className="px-2.5 py-1.5 rounded-lg text-sm font-bold hover:bg-indigo-600 transition border border-indigo-500">
-                {t.langToggle}
-              </button>
+              <LangPicker lang={lang} setLang={setLang}
+                className="px-1.5 py-1.5 rounded-lg text-sm font-bold bg-transparent hover:bg-indigo-600 transition border border-indigo-500 cursor-pointer" />
               <button onClick={refresh} className={`p-2 rounded-lg transition hover:bg-indigo-600 ${loading ? 'animate-spin' : ''}`} title={t.navRefresh} aria-label={t.navRefresh}>
                 <I.Refresh />
               </button>
@@ -1726,7 +1978,7 @@
         const inUse = (id) => hasSessions(data.groups.filter(g => (g.languageId || 'none') === id));
         const labelled = data.languages.filter(l => inUse(l.id));
         if (!labelled.length) return [];
-        const none = { id: 'none', name: { en: t.noLanguageSet, zh: t.noLanguageSet } };
+        const none = { id: 'none', name: { en: t.noLanguageSet, zh: t.noLanguageSet, ko: t.noLanguageSet } };
         return inUse('none') ? [...labelled, none] : labelled;
       })();
 
@@ -2085,10 +2337,8 @@
                     {mode === 'register' ? t.registerSubtitle : mode === 'breakglass' ? t.breakGlassSubtitle : t.signInSubtitle}
                   </p>
                 </div>
-                <button onClick={() => setLang(lang === 'en' ? 'zh' : 'en')}
-                  className="text-xs font-bold text-indigo-600 border border-indigo-200 rounded-lg px-2 py-1 hover:bg-indigo-50 shrink-0">
-                  {t.langToggle}
-                </button>
+                <LangPicker lang={lang} setLang={setLang}
+                  className="text-xs font-bold text-indigo-600 bg-white border border-indigo-200 rounded-lg px-1.5 py-1 hover:bg-indigo-50 shrink-0 cursor-pointer" />
               </div>
               {authNotice && <p className="bg-amber-50 border border-amber-200 text-amber-700 rounded-lg px-3 py-2 text-xs mb-3">{authNotice}</p>}
               {apiError   && <p className="bg-red-50 border border-red-200 text-red-700 rounded-lg px-3 py-2 text-xs mb-3">{apiError}</p>}
@@ -2231,12 +2481,12 @@
       const [gForm,    setGForm]    = useState(null);
       const [gEditing, setGEditing] = useState(null);
 
-      const openAddGroup  = ()  => { setGEditing(null); setGForm({ name:{en:'',zh:''}, meetingIds:data.meetings[0]?[data.meetings[0].id]:[], memberIds:[], languageId:'' }); };
-      const openEditGroup = (g) => { setGEditing(g.id); setGForm({ name:{...g.name}, meetingIds:[...g.meetingIds], memberIds:[...g.memberIds], languageId:g.languageId || '' }); };
+      const openAddGroup  = ()  => { setGEditing(null); setGForm({ name:{en:'',zh:'',ko:''}, meetingIds:data.meetings[0]?[data.meetings[0].id]:[], memberIds:[], languageId:'' }); };
+      const openEditGroup = (g) => { setGEditing(g.id); setGForm({ name:{ko:'', ...g.name}, meetingIds:[...g.meetingIds], memberIds:[...g.memberIds], languageId:g.languageId || '' }); };
       const toggleGMember  = (id) => setGForm(f => ({ ...f, memberIds:  f.memberIds.includes(id)  ? f.memberIds.filter(x=>x!==id)  : [...f.memberIds, id] }));
       const toggleGMeeting = (id) => setGForm(f => ({ ...f, meetingIds: f.meetingIds.includes(id) ? f.meetingIds.filter(x=>x!==id) : [...f.meetingIds, id] }));
       const saveGroup = () => {
-        if (!gForm.name.en.trim() && !gForm.name.zh.trim()) return alert(t.groupNameRequired);
+        if (!hasName(gForm.name)) return alert(t.groupNameRequired);
         if (gForm.meetingIds.length === 0) return alert(t.groupMeetingsRequired);
         run(async () => {
           // '' is how the select spells "no language"; the server stores null.
@@ -2327,9 +2577,9 @@
       // ── Meeting form ──
       const [mForm,    setMForm]    = useState(null);
       const [mEditing, setMEditing] = useState(null);
-      const openEditMeeting = (m) => { setMEditing(m.id); setMForm({ name:{...m.name}, dayOfWeek:m.dayOfWeek ?? null }); };
+      const openEditMeeting = (m) => { setMEditing(m.id); setMForm({ name:{ko:'', ...m.name}, dayOfWeek:m.dayOfWeek ?? null }); };
       const saveMeeting = () => {
-        if (!mForm.name.en.trim() && !mForm.name.zh.trim()) return alert(t.meetingNameRequired);
+        if (!hasName(mForm.name)) return alert(t.meetingNameRequired);
         run(async () => {
           if (mEditing) await api.put(`/api/meetings/${mEditing}`, mForm);
           else          await api.post('/api/meetings', mForm);
@@ -2344,10 +2594,10 @@
       // ── Language form ──
       const [lForm,    setLForm]    = useState(null);
       const [lEditing, setLEditing] = useState(null);
-      const openAddLanguage  = ()  => { setLEditing(null);  setLForm({ name:{en:'',zh:''} }); };
-      const openEditLanguage = (l) => { setLEditing(l.id);  setLForm({ name:{...l.name} }); };
+      const openAddLanguage  = ()  => { setLEditing(null);  setLForm({ name:{en:'',zh:'',ko:''} }); };
+      const openEditLanguage = (l) => { setLEditing(l.id);  setLForm({ name:{ko:'', ...l.name} }); };
       const saveLanguage = () => {
-        if (!lForm.name.en.trim() && !lForm.name.zh.trim()) return alert(t.languageNameRequired);
+        if (!hasName(lForm.name)) return alert(t.languageNameRequired);
         run(async () => {
           if (lEditing) await api.put(`/api/languages/${lEditing}`, lForm);
           else          await api.post('/api/languages', lForm);
@@ -2519,7 +2769,7 @@
           {activeTab === 'meetings' && (
             <div>
               <div className="flex justify-end mb-3">
-                <button onClick={() => { setMEditing(null); setMForm({ name:{en:'',zh:''}, dayOfWeek:0 }); }}
+                <button onClick={() => { setMEditing(null); setMForm({ name:{en:'',zh:'',ko:''}, dayOfWeek:0 }); }}
                   className="flex items-center gap-1.5 bg-indigo-600 text-white px-3 py-2 rounded-lg hover:bg-indigo-700 text-sm font-semibold">
                   <I.Plus /> {t.newMeeting}
                 </button>
@@ -2712,10 +2962,7 @@
               <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-2xl max-h-[90vh] flex flex-col">
                 <h2 className="text-xl font-bold text-gray-800 mb-1">{t.importTitle}</h2>
                 <p className="text-sm text-gray-500 mb-4">
-                  {t.locale === 'zh-TW'
-                    ? <>必填：<code className="bg-gray-100 px-1 rounded text-xs">firstName</code>、<code className="bg-gray-100 px-1 rounded text-xs">lastName</code>。選填：<code className="bg-gray-100 px-1 rounded text-xs">phone</code>、<code className="bg-gray-100 px-1 rounded text-xs">group</code>（須與現有小組名稱完全相符）。亦接受 <code className="bg-gray-100 px-1 rounded text-xs">first_name</code> / <code className="bg-gray-100 px-1 rounded text-xs">last_name</code> / <code className="bg-gray-100 px-1 rounded text-xs">group_name</code>。</>
-                    : <>Required: <code className="bg-gray-100 px-1 rounded text-xs">firstName</code>, <code className="bg-gray-100 px-1 rounded text-xs">lastName</code>. Optional: <code className="bg-gray-100 px-1 rounded text-xs">phone</code>, <code className="bg-gray-100 px-1 rounded text-xs">group</code> (must match an existing group name exactly). Also accepts <code className="bg-gray-100 px-1 rounded text-xs">first_name</code> / <code className="bg-gray-100 px-1 rounded text-xs">last_name</code> / <code className="bg-gray-100 px-1 rounded text-xs">group_name</code>.</>
-                  }
+                  {t.importHint}
                 </p>
 
                 {(() => {
@@ -2834,13 +3081,7 @@
                 <div className="space-y-4 mb-5">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">{t.groupNameLabel}</label>
-                    <div className="grid grid-cols-2 gap-2">
-                      <input value={gForm.name.en} onChange={e => setGForm(f=>({...f,name:{...f.name,en:e.target.value}}))} placeholder={t.nameEnLabel}
-                        className="border border-gray-300 rounded-lg px-3 py-2 w-full text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400" />
-                      <input value={gForm.name.zh} onChange={e => setGForm(f=>({...f,name:{...f.name,zh:e.target.value}}))} placeholder={t.nameZhLabel}
-                        className="border border-gray-300 rounded-lg px-3 py-2 w-full text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400" />
-                    </div>
-                    <p className="text-xs text-gray-400 mt-1">{t.nameHint}</p>
+                    <NameInputs name={gForm.name} onChange={name => setGForm(f=>({...f,name}))} t={t} />
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -2911,7 +3152,7 @@
           {pForm && (
             <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
               <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-sm">
-                <h2 className="text-xl font-bold text-gray-800 mb-4">{pEditing ? (t.locale==='zh-TW'?'編輯人員':'Edit Person') : t.newPerson}</h2>
+                <h2 className="text-xl font-bold text-gray-800 mb-4">{pEditing ? t.editPersonTitle : t.newPerson}</h2>
                 <div className="space-y-3 mb-5">
                   {personFields.map(([label, key, ph]) => (
                     <div key={key}>
@@ -2936,13 +3177,7 @@
                 <h2 className="text-xl font-bold text-gray-800 mb-4">{lEditing ? t.editLanguageTitle : t.newLanguageTitle}</h2>
                 <div className="mb-5">
                   <label className="block text-sm font-medium text-gray-700 mb-1">{t.languageNameLabel}</label>
-                  <div className="grid grid-cols-2 gap-2">
-                    <input value={lForm.name.en} onChange={e => setLForm(f=>({...f,name:{...f.name,en:e.target.value}}))} placeholder={t.nameEnLabel} autoFocus
-                      className="border border-gray-300 rounded-lg px-3 py-2 w-full text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400" />
-                    <input value={lForm.name.zh} onChange={e => setLForm(f=>({...f,name:{...f.name,zh:e.target.value}}))} placeholder={t.nameZhLabel}
-                      className="border border-gray-300 rounded-lg px-3 py-2 w-full text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400" />
-                  </div>
-                  <p className="text-xs text-gray-400 mt-1">{t.nameHint}</p>
+                  <NameInputs name={lForm.name} onChange={name => setLForm(f=>({...f,name}))} t={t} autoFocus />
                 </div>
                 <div className="flex gap-2">
                   <button onClick={() => setLForm(null)} className="flex-1 py-2 border border-gray-300 rounded-lg text-gray-600 hover:bg-gray-50 text-sm">{t.cancel}</button>
@@ -2960,13 +3195,7 @@
                 <div className="space-y-3 mb-5">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">{t.meetingNameLabel}</label>
-                    <div className="grid grid-cols-2 gap-2">
-                      <input value={mForm.name.en} onChange={e => setMForm(f=>({...f,name:{...f.name,en:e.target.value}}))} placeholder={t.nameEnLabel}
-                        className="border border-gray-300 rounded-lg px-3 py-2 w-full text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400" />
-                      <input value={mForm.name.zh} onChange={e => setMForm(f=>({...f,name:{...f.name,zh:e.target.value}}))} placeholder={t.nameZhLabel}
-                        className="border border-gray-300 rounded-lg px-3 py-2 w-full text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400" />
-                    </div>
-                    <p className="text-xs text-gray-400 mt-1">{t.nameHint}</p>
+                    <NameInputs name={mForm.name} onChange={name => setMForm(f=>({...f,name}))} t={t} />
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">{t.dayOfWeekLabel}</label>
@@ -3057,10 +3286,8 @@
               <h1 className="text-xl font-bold text-gray-800 mb-1">{t.pendingTitle}</h1>
               <p className="text-sm text-gray-500 mb-5">{t.pendingBody(username || '')}</p>
               <div className="flex gap-2">
-                <button onClick={() => setLang(lang === 'en' ? 'zh' : 'en')}
-                  className="px-3 py-2 border border-gray-300 rounded-lg text-gray-600 hover:bg-gray-50 text-sm font-semibold">
-                  {t.langToggle}
-                </button>
+                <LangPicker lang={lang} setLang={setLang}
+                  className="px-2 py-2 bg-white border border-gray-300 rounded-lg text-gray-600 hover:bg-gray-50 text-sm font-semibold cursor-pointer" />
                 <button onClick={signOut}
                   className="flex-1 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-semibold text-sm">
                   {t.signOut}
